@@ -61,17 +61,11 @@ export const sharedEntityChips = css`
   .switches {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
+    overflow: hidden;
     width: 100%;
     margin: 0;
     padding: 0;
-  }
-
-  .switch-row {
-    display: flex;
-    align-items: stretch;
-    overflow: hidden;
-    width: 100%;
     border-radius: 8px;
     background: var(
       --slider-bar-background,
@@ -81,6 +75,20 @@ export const sharedEntityChips = css`
         var(--card-background-color, #fff)
       )
     );
+  }
+
+  .switch-row {
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    width: 100%;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .switch-row + .switch-row {
+    border-top: 1px solid
+      color-mix(in srgb, var(--primary-text-color) 10%, transparent);
   }
 
   .switch-status {

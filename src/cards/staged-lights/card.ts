@@ -28,7 +28,7 @@ import {
   DEFAULT_TITLE,
   RGB_PRESETS,
   ROW_META,
-  SHOWCASE_CHIPS,
+  ROW_ORDER,
   SHOWCASE_TITLE,
 } from "./const";
 import "./editor";
@@ -78,7 +78,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       warm: [],
       white: [],
       direct_control: true,
-      show_switches: true,
+      show_switches: false,
     };
   }
 
@@ -94,7 +94,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
   public getCardSize(): number {
     if (isEmptyLightsConfig(this._config)) {
-      return 6;
+      return 4;
     }
     const rgbExtra = this._rowIds("rgb").length ? 1 : 0;
     return 2 + this._rows.length + rgbExtra + this._entityButtonRows;
@@ -104,7 +104,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     return {
       columns: 12,
       min_rows: isEmptyLightsConfig(this._config)
-        ? 6
+        ? 4
         : 2 + this._rows.length + (this._rowIds("rgb").length ? 1 : 0) + this._entityButtonRows,
     };
   }
@@ -141,7 +141,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   private get _visibleEntities() {
-    if (!this._config || this._config.show_switches === false) {
+    if (!this._config?.show_switches) {
       return [];
     }
     return visibleLights(this._config);
@@ -398,7 +398,28 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     `;
   }
 
-  private _renderRgbRow(showcase = false) {
+  private _rowIsOn(row: LightRowId): boolean {
+    return Boolean(this._current[row]?.on);
+  }
+
+  private _renderPower(row: LightRowId) {
+    const meta = ROW_META[row];
+    const on = this._rowIsOn(row);
+    return html`
+      <button
+        class="power-icon ${on ? "on" : "off"}"
+        type="button"
+        aria-label="${meta.label} power"
+        aria-pressed=${on}
+        @click=${() => this._toggleRow(row)}
+      >
+        <ha-icon .icon=${meta.icon}></ha-icon>
+        <span class="tick ${on ? "active" : ""}">${meta.label}</span>
+      </button>
+    `;
+  }
+
+  private _renderRgbControls(showcase = false, rowIndex = 1) {
     const rgb = this._current.rgb;
     const color = rgb?.hex || DEFAULT_RGB_HEX;
     const percent = brightnessToPercent(rgb?.brightness ?? 1);
@@ -407,20 +428,10 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     );
     return html`
       <div
-        class="rgb-block ${rgb?.on ? "" : "power-off"}"
-        style="--current-color: ${color}"
+        class="mode-controls rgb-controls ${rgb?.on ? "" : "power-off"}"
+        style="--current-color: ${color}; grid-row: ${rowIndex}"
         aria-label="RGB brightness and color"
       >
-        <button
-          class="power-icon ${rgb?.on ? "on" : "off"}"
-          type="button"
-          aria-label="RGB power"
-          aria-pressed=${Boolean(rgb?.on)}
-          @click=${() => this._toggleRow("rgb")}
-        >
-          <ha-icon .icon=${ROW_META.rgb.icon}></ha-icon>
-          <span class="tick ${rgb?.on ? "active" : ""}">${ROW_META.rgb.label}</span>
-        </button>
         <input
           class="brightness"
           type="range"
@@ -458,7 +469,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     `;
   }
 
-  private _renderStageRow(row: "warm" | "white") {
+  private _renderStageControls(row: "warm" | "white", rowIndex = 1) {
     const meta = ROW_META[row];
     const count = this._stageCount;
     const names = intensityNames(count);
@@ -470,26 +481,37 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     );
     return html`
       <div
-        class="mode-row has-labels ${rowState?.on ? "" : "power-off"}"
-        style="--slider-progress: ${fill}%; --stage-count: ${count}"
+        class="mode-controls stage-controls ${rowState?.on ? "" : "power-off"}"
+        style="--slider-progress: ${fill}%; --stage-count: ${count}; grid-row: ${rowIndex}"
         aria-label="${meta.label} intensity"
       >
         <div class="slider-visual" aria-hidden="true">
           <div class="slider-line"></div>
           <div class="slider-fill"></div>
         </div>
-        <button
-          class="power-icon ${rowState?.on ? "on" : "off"}"
-          type="button"
-          aria-label="${meta.label} power"
-          aria-pressed=${Boolean(rowState?.on)}
-          @click=${() => this._toggleRow(row)}
-        >
-          <ha-icon .icon=${meta.icon}></ha-icon>
-          <span class="tick ${rowState?.on ? "active" : ""}">${meta.label}</span>
-        </button>
         ${names.map((label, index) =>
           this._renderStageDot(row, index + 1, current, Boolean(rowState?.on), label),
+        )}
+      </div>
+    `;
+  }
+
+  private _renderModeGroup(showcase = false) {
+    const rows = showcase ? ROW_ORDER : this._rows;
+    return html`
+      <div class="mode-group" style="--mode-rows: ${rows.length}">
+        <div class="power-bar">
+          ${rows.map((row) => this._renderPower(row))}
+        </div>
+        ${rows.map((row, index) =>
+          row === "rgb"
+            ? this._renderRgbControls(showcase, index + 1)
+            : this._renderStageControls(row, index + 1),
+        )}
+        ${rows.slice(0, -1).map(
+          (_row, index) => html`
+            <div class="mode-rule" style="grid-row: ${index + 1}" aria-hidden="true"></div>
+          `,
         )}
       </div>
     `;
@@ -506,31 +528,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
           <div class="stage-value">70%</div>
         </div>
         <div class="slider-section">
-          <div class="mode-group">
-            ${this._renderRgbRow(true)}
-            ${this._renderStageRow("warm")}
-            ${this._renderStageRow("white")}
-          </div>
-          <div class="switches">
-            ${chunkEvenly(SHOWCASE_CHIPS, 3).map(
-              (line) => html`
-                <div class="switch-row">
-                  ${line.map(
-                    (item) => html`
-                      <button
-                        class="switch-status ${item.state}"
-                        type="button"
-                        tabindex="-1"
-                        aria-hidden="true"
-                      >
-                        <ha-icon .icon=${item.icon}></ha-icon>
-                      </button>
-                    `,
-                  )}
-                </div>
-              `,
-            )}
-          </div>
+          ${this._renderModeGroup(true)}
         </div>
       </ha-card>
     `;
@@ -563,7 +561,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
     const current = this._current;
     const active = activeLightRow(current);
-    const rows = this._rows;
 
     return html`
       <ha-card>
@@ -582,11 +579,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
             </div>`
           : nothing}
         <div class="slider-section">
-          <div class="mode-group">
-            ${rows.map((row) =>
-              row === "rgb" ? this._renderRgbRow() : this._renderStageRow(row),
-            )}
-          </div>
+          ${this._renderModeGroup()}
           ${this._renderChips()}
         </div>
       </ha-card>

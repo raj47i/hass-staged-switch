@@ -299,7 +299,7 @@ export class StagedLightsCardEditor extends LitElement {
         ></ha-textfield>
         <span class="help">
           Intensity labels: ${names.join(", ")}. Only RGB, Warm, or White can
-          be on at once. Entity chips stay in one group at the bottom.
+          be on at once. Entity chips stay off until you enable them.
         </span>
 
         <div class="inline">
@@ -319,7 +319,7 @@ export class StagedLightsCardEditor extends LitElement {
           <span class="label">Show entity buttons</span>
           <input
             type="checkbox"
-            .checked=${config.show_switches !== false}
+            .checked=${Boolean(config.show_switches)}
             @change=${(ev: Event) => {
               const target = ev.target;
               if (target instanceof HTMLInputElement) {

@@ -5,7 +5,7 @@ import {
   MAX_LIGHT_STAGES,
 } from "./const";
 import { normalizeHex } from "./color";
-import { percentToBrightness, stageToBrightness } from "./stages";
+import { stageToBrightness } from "./stages";
 import type { LightRowId, LightsCardState, RgbRowState, StageRowState } from "./types";
 
 const defaultState = (): LightsCardState => ({
@@ -38,12 +38,11 @@ const parseStageValue = (value: unknown, fallback: number): number => {
 };
 
 const parseRgbBrightness = (rgb: Record<string, unknown>, fallback: number): number => {
-  const brightness = Number(rgb.b ?? rgb.brightness);
-  if (Number.isFinite(brightness) && brightness > MAX_LIGHT_STAGES) {
-    return clamp(Math.round(brightness), 1, 255);
-  }
-  if (Number.isFinite(brightness) && brightness > 0) {
-    return percentToBrightness(brightness);
+  if (rgb.b !== undefined || rgb.brightness !== undefined) {
+    const brightness = Number(rgb.b ?? rgb.brightness);
+    if (Number.isFinite(brightness) && brightness > 0) {
+      return clamp(Math.round(brightness), 1, 255);
+    }
   }
   const stage = Number(rgb.s ?? rgb.stage);
   if (Number.isFinite(stage) && stage > 0) {
@@ -137,10 +136,16 @@ export const serializeLightsState = (state?: LightsCardState): string => {
   return JSON.stringify({
     r: {
       o: exclusive.rgb.on ? 1 : 0,
-      b: exclusive.rgb.brightness,
-      c: exclusive.rgb.hex,
+      b: clamp(Math.round(Number(exclusive.rgb.brightness)) || DEFAULT_RGB_BRIGHTNESS, 1, 255),
+      c: exclusive.rgb.hex || DEFAULT_RGB_HEX,
     },
-    w: { o: exclusive.warm.on ? 1 : 0, s: exclusive.warm.stage },
-    n: { o: exclusive.white.on ? 1 : 0, s: exclusive.white.stage },
+    w: {
+      o: exclusive.warm.on ? 1 : 0,
+      s: clamp(Math.round(Number(exclusive.warm.stage)) || 1, 1, MAX_LIGHT_STAGES),
+    },
+    n: {
+      o: exclusive.white.on ? 1 : 0,
+      s: clamp(Math.round(Number(exclusive.white.stage)) || 1, 1, MAX_LIGHT_STAGES),
+    },
   });
 };

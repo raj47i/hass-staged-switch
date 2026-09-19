@@ -45,15 +45,3 @@ export const ROW_META: Record<
 export const SHOWCASE_TITLE = "Living room";
 export const SHOWCASE_STAGE_COUNT = 3;
 export const SHOWCASE_CURRENT_STAGE = 2;
-export const SHOWCASE_CHIPS: Array<{
-  entity: string;
-  icon: string;
-  state: "on" | "off";
-}> = [
-  { entity: "light.sofa_rgb", icon: "mdi:palette", state: "on" },
-  { entity: "light.cabinet_rgb", icon: "mdi:palette", state: "on" },
-  { entity: "light.floor_lamp", icon: "mdi:lightbulb", state: "off" },
-  { entity: "light.reading", icon: "mdi:lightbulb", state: "off" },
-  { entity: "light.ceiling", icon: "mdi:white-balance-sunny", state: "off" },
-  { entity: "light.desk", icon: "mdi:white-balance-sunny", state: "off" },
-];

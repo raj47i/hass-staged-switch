@@ -1,6 +1,6 @@
 import { clamp } from "../../shared/hass";
 
-export const hexToRgb = (hex: string): [number, number, number] => {
+const expandHex = (hex: string): string | undefined => {
   const value = hex.replace("#", "").trim();
   const full =
     value.length === 3
@@ -9,7 +9,12 @@ export const hexToRgb = (hex: string): [number, number, number] => {
           .map((part) => part + part)
           .join("")
       : value;
-  if (!/^[0-9a-f]{6}$/i.test(full)) {
+  return /^[0-9a-f]{6}$/i.test(full) ? full : undefined;
+};
+
+export const hexToRgb = (hex: string): [number, number, number] => {
+  const full = expandHex(hex);
+  if (!full) {
     return [255, 152, 0];
   }
   return [
@@ -71,6 +76,8 @@ export const normalizeHex = (value: string | undefined, fallback: string): strin
     return fallback;
   }
   const hex = value.startsWith("#") ? value : `#${value}`;
-  const rgb = hexToRgb(hex);
-  return rgbToHex(rgb);
+  if (!expandHex(hex)) {
+    return fallback;
+  }
+  return rgbToHex(hexToRgb(hex));
 };

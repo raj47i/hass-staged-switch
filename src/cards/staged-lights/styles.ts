@@ -45,9 +45,14 @@ const lightsStyles = css`
   }
 
   .mode-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    --mode-gap: 10px;
+    display: grid;
+    grid-template-columns: var(--power-button-size) minmax(0, 1fr);
+    grid-template-rows: repeat(var(--mode-rows, 3), minmax(var(--slider-button-height), auto));
+    column-gap: var(--mode-gap);
+    row-gap: 0;
+    align-items: stretch;
+    width: 100%;
     padding: 8px var(--slider-well-pad-x);
     border-radius: 8px;
     background: var(
@@ -60,55 +65,76 @@ const lightsStyles = css`
     );
   }
 
-  .mode-row,
-  .rgb-block {
-    --cols: calc(var(--stage-count, 3) + 1);
-    position: relative;
-    width: 100%;
-  }
-
-  .mode-row {
+  .power-bar {
+    grid-column: 1;
+    grid-row: 1 / span var(--mode-rows, 3);
     display: grid;
-    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-    align-items: center;
-    min-height: var(--slider-button-height);
+    grid-template-rows: subgrid;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--primary-text-color) 12%, transparent);
   }
 
-  .mode-row.has-labels {
-    align-items: start;
-    padding-top: 4px;
-    padding-bottom: 2px;
+  @supports not (grid-template-rows: subgrid) {
+    .power-bar {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .power-bar .power-icon {
+      flex: 1 1 0;
+    }
   }
 
-  .mode-row.power-off .slider-fill,
-  .rgb-block.power-off .brightness {
+  .mode-rule {
+    grid-column: 1 / -1;
+    align-self: end;
+    z-index: 4;
+    height: 1px;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--primary-text-color) 14%, transparent);
+  }
+
+  .mode-controls {
+    position: relative;
+    display: flex;
+    grid-column: 2;
+    align-self: stretch;
+    min-width: 0;
+    width: 100%;
+    padding: 0;
+  }
+
+  .mode-controls.power-off .slider-fill,
+  .mode-controls.power-off .brightness {
     opacity: 0.55;
   }
 
-  .rgb-block {
-    display: grid;
-    grid-template-columns: var(--power-button-size) minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    gap: 8px 10px;
-    align-items: center;
+  .rgb-controls {
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--slider-button-height);
   }
 
-  .rgb-block .power-icon {
-    grid-row: 1 / span 2;
+  .stage-controls {
+    align-items: center;
+    justify-content: space-between;
+    min-height: var(--slider-button-height);
   }
 
   .slider-visual {
     position: absolute;
-    left: calc(50% / var(--cols));
-    right: calc(50% / var(--cols));
-    top: 50%;
+    left: calc(var(--slider-dot-size) / 2);
+    right: calc(var(--slider-dot-size) / 2);
+    top: calc(
+      50% - (var(--stage-label-gap) + var(--stage-label-height)) / 2
+    );
     height: 0;
     pointer-events: none;
     z-index: 1;
-  }
-
-  .mode-row.has-labels .slider-visual {
-    top: calc(var(--slider-dot-size) / 2 + 4px);
   }
 
   .slider-line,
@@ -138,18 +164,19 @@ const lightsStyles = css`
     display: inline-flex;
     flex-direction: column;
     flex-shrink: 0;
-    justify-self: center;
     align-items: center;
     justify-content: center;
     gap: 4px;
-    width: var(--power-button-size);
-    height: var(--power-button-size);
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    margin: 0;
     padding: 6px;
     border: 0;
-    border-radius: 8px;
-    background: var(--card-background-color, #fff);
-    box-shadow: inset 0 0 0 1px
-      color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    border-radius: 0;
+    appearance: none;
+    background: transparent;
+    box-shadow: none;
     color: var(
       --state-inactive-color,
       var(--state-icon-color, var(--secondary-text-color, #9e9e9e))
@@ -174,16 +201,6 @@ const lightsStyles = css`
         16%,
       var(--card-background-color, #fff)
     );
-    box-shadow: inset 0 0 0 1px
-      color-mix(
-        in srgb,
-        var(
-            --state-active-color,
-            var(--state-icon-active-color, var(--primary-color))
-          )
-          35%,
-        transparent
-      );
   }
 
   .power-icon:focus-visible,

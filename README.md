@@ -334,7 +334,7 @@ A lights card with three exclusive rows:
 2. **Warm** — Power button labeled Warm, plus 2–4 intensity stages: Dim, Soft, Medium, Bright (fewer labels when you use fewer stages). Lights or switches.
 3. **White / sun** — the same intensity stages for cool or daylight lights or switches.
 
-Only one of RGB, Warm, or White can be on at a time. All entity chips sit together at the bottom, not per row.
+Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row.
 
 All of that state is stored in **one** `input_text` helper as a short JSON string. You do not create a helper per slider.
 
@@ -374,7 +374,7 @@ Power off keeps the last row, RGB brightness and color, and Warm/White intensity
 | `warm` | list | no | Lights or switches for the Warm row |
 | `white` | list | no | Lights or switches for the White row |
 | `direct_control` | boolean | no | Default `true`. `false` only writes the helper |
-| `show_switches` | boolean | no | Default `true`. Show every entity once at the bottom |
+| `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom |
 
 RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
 
@@ -404,7 +404,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.2-beta`.
+2. Commit and tag, for example `v0.0.3-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

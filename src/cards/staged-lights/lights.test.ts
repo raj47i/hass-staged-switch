@@ -9,6 +9,7 @@ import {
 } from "./roster";
 import {
   brightnessToPercent,
+  configuredRows,
   intensityName,
   lightsStageCount,
   percentToBrightness,
@@ -140,5 +141,48 @@ describe("lights roster", () => {
       "light.ceiling",
       "input_text.living_lights",
     ]);
+  });
+});
+
+describe("edge cases", () => {
+  it("clamps NaN, overflow, and out-of-range intensity", () => {
+    expect(brightnessToPercent(Number.NaN)).toBe(1);
+    expect(brightnessToPercent(0)).toBe(1);
+    expect(brightnessToPercent(999)).toBe(100);
+    expect(percentToBrightness(Number.NaN)).toBe(3);
+    expect(percentToBrightness(1)).toBe(3);
+    expect(percentToBrightness(100)).toBe(255);
+    expect(stageToBrightness(Number.NaN, Number.NaN)).toBe(85);
+    expect(intensityName(0, 3)).toBe("Dim");
+    expect(intensityName(99, 3)).toBe("Bright");
+    expect(lightsStageCount(undefined)).toBe(3);
+    expect(lightsStageCount({ type: "custom:staged-lights-card", stages: 0 })).toBe(3);
+    expect(configuredRows({ type: "custom:staged-lights-card", rgb: ["light.a"] })).toEqual(["rgb"]);
+  });
+
+  it("reads old stage-only RGB JSON and rejects junk payloads", () => {
+    expect(parseLightsState('{"r":{"o":1,"s":2,"c":"#2196f3"}}').rgb.brightness).toBe(128);
+    expect(parseLightsState('{"r":{"o":1,"b":3,"c":"#fff"}}').rgb.brightness).toBe(3);
+    expect(parseLightsState("[]").rgb.on).toBe(true);
+    expect(parseLightsState("null").rgb.hex).toBe("#ff8a1d");
+    expect(parseLightsState('{"r":{"c":"not-a-color"}}').rgb.hex).toBe("#ff8a1d");
+    const off = exclusiveLightsState(parseLightsState(), undefined);
+    expect(activeLightRow(off)).toBeUndefined();
+    expect(parseLightsState(serializeLightsState(off))).toEqual(off);
+  });
+
+  it("keeps serialized helper JSON under 255 characters", () => {
+    const raw = serializeLightsState({
+      rgb: { on: false, brightness: Number.NaN, hex: "" },
+      warm: { on: true, stage: 99 },
+      white: { on: true, stage: Number.NaN },
+    });
+    expect(raw.length).toBeLessThan(255);
+    const parsed = parseLightsState(raw);
+    expect(parsed.warm.on).toBe(true);
+    expect(parsed.white.on).toBe(false);
+    expect(parsed.warm.stage).toBe(4);
+    expect(parsed.rgb.brightness).toBe(180);
+    expect(parsed.rgb.hex).toBe("#ff8a1d");
   });
 });

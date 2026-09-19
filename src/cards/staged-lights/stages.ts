@@ -32,16 +32,19 @@ export const intensityName = (stage: number, count: number): string => {
   return names[clamp(stage, 1, names.length) - 1] ?? names[0] ?? "Dim";
 };
 
+const finiteOr = (value: number, fallback: number): number =>
+  Number.isFinite(value) ? value : fallback;
+
 export const stageToBrightness = (stage: number, count: number): number => {
-  const stages = clamp(count, MIN_LIGHT_STAGES, MAX_LIGHT_STAGES);
-  return Math.round((clamp(stage, 1, stages) / stages) * 255);
+  const stages = clamp(finiteOr(count, DEFAULT_LIGHT_STAGES), MIN_LIGHT_STAGES, MAX_LIGHT_STAGES);
+  return Math.round((clamp(finiteOr(stage, 1), 1, stages) / stages) * 255);
 };
 
 export const brightnessToPercent = (brightness: number): number =>
-  clamp(Math.round((clamp(brightness, 1, 255) / 255) * 100), 1, 100);
+  clamp(Math.round((clamp(finiteOr(brightness, 1), 1, 255) / 255) * 100), 1, 100);
 
 export const percentToBrightness = (percent: number): number =>
-  clamp(Math.round((clamp(percent, 1, 100) / 100) * 255), 1, 255);
+  clamp(Math.round((clamp(finiteOr(percent, 1), 1, 100) / 100) * 255), 1, 255);
 
 export const configuredRows = (config?: StagedLightsCardConfig): LightRowId[] =>
   (["rgb", "warm", "white"] as const).filter((row) => rowRoster(config, row).length > 0);
