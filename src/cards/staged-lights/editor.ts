@@ -27,7 +27,7 @@ import {
   ROW_META,
   STAGE_DOMAINS,
 } from "./const";
-import { lightsDirectControl, resolveRgbPresets, rowPowerIcons } from "./look";
+import { resolveRgbPresets, rowPowerIcons } from "./look";
 import {
   alignedStageMaps,
   intensityNames,
@@ -627,24 +627,11 @@ export class StagedLightsCardEditor extends LitElement {
       </span>
 
       <div class="inline">
-        <span class="label">Directly control lights</span>
-        <input
-          type="checkbox"
-          .checked=${lightsDirectControl(config)}
-          @change=${(ev: Event) => this._update({ direct_control: this._checkboxChecked(ev) })}
-        />
-      </div>
-      <div class="inline">
         <span class="label">Show entity buttons</span>
         <input
           type="checkbox"
           .checked=${Boolean(config.show_switches)}
-          @change=${(ev: Event) => {
-            const target = ev.target;
-            if (target instanceof HTMLInputElement) {
-              this._update({ show_switches: target.checked });
-            }
-          }}
+          @change=${(ev: Event) => this._update({ show_switches: this._checkboxChecked(ev) })}
         />
       </div>
     `;

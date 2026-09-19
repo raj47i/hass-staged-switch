@@ -31,6 +31,7 @@ export interface StagedLightsCardConfig extends LovelaceCardConfig {
   rgb_icons?: RowIcons;
   warm_icons?: RowIcons;
   white_icons?: RowIcons;
+  /** Ignored leftover. The card always controls its lights. */
   direct_control?: boolean;
   show_switches?: boolean;
 }

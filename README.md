@@ -381,7 +381,7 @@ The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s"
 
 Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
 
-**Directly control lights** is off by default. The card still writes the text helper (and this browser’s memory). Turn the option on if the card should also call `light.turn_on` / `turn_off`.
+RGB, Warm, and White always turn their lights on and off. **Show entity buttons** is off by default. Turn it on to show every entity once at the bottom; those buttons always toggle the entity.
 
 | Option | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -397,8 +397,7 @@ Power off keeps the last row, RGB brightness and color, and Warm/White intensity
 | `rgb_icons` | map | no | `{ on, off }` MDI icons for the RGB power button |
 | `warm_icons` | map | no | `{ on, off }` icons for the Warm power button |
 | `white_icons` | map | no | `{ on, off }` icons for the White power button |
-| `direct_control` | boolean | no | Default `false`. `true` turns lights on/off. `false` only writes the helper |
-| `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom |
+| `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom. Those buttons always toggle the entity |
 
 RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
 

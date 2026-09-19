@@ -21,7 +21,7 @@ import {
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
 import { hexToRgb, normalizeHex } from "./color";
-import { lightsDirectControl, lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
+import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   CARD_NAME,
   CARD_TITLE,
@@ -77,7 +77,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       rgb: [],
       warm: [],
       white: [],
-      direct_control: false,
       show_switches: false,
     };
   }
@@ -205,15 +204,10 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
   }
 
-  private get _directControl() {
-    return lightsDirectControl(this._config);
-  }
-
   private async _turnOff(entityIds: string[]): Promise<void> {
     await applyToggleTargets(
       this.hass,
       entityIds.filter(isValidEntityId).map((entity) => ({ entity, state: "off" as const })),
-      this._directControl,
     );
   }
 
@@ -221,22 +215,14 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     const stage = state[row]?.stage ?? 1;
     const targets = resolveRowStageTargets(this._config, row, stage);
     const { onLights, rest } = splitStageTargets(targets);
-    await applyLightLooks(
-      this.hass,
-      onLights,
-      {
-        on: true,
-        brightness: stageToBrightness(stage, this._stageCount(row)),
-      },
-      this._directControl,
-    );
-    await applyToggleTargets(this.hass, rest, this._directControl);
+    await applyLightLooks(this.hass, onLights, {
+      on: true,
+      brightness: stageToBrightness(stage, this._stageCount(row)),
+    });
+    await applyToggleTargets(this.hass, rest);
   }
 
   private async _applyMode(state: LightsCardState): Promise<void> {
-    if (!this._directControl) {
-      return;
-    }
     const rgb = this._rowIds("rgb");
     const warm = this._rowIds("warm");
     const white = this._rowIds("white");
@@ -252,16 +238,11 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
     await this._turnOff([...new Set(off)]);
     if (state.rgb?.on) {
-      await applyLightLooks(
-        this.hass,
-        rgb,
-        {
-          on: true,
-          brightness: clamp(Number(state.rgb.brightness) || 1, 1, 255),
-          rgb: hexToRgb(state.rgb.hex || DEFAULT_RGB_HEX),
-        },
-        this._directControl,
-      );
+      await applyLightLooks(this.hass, rgb, {
+        on: true,
+        brightness: clamp(Number(state.rgb.brightness) || 1, 1, 255),
+        rgb: hexToRgb(state.rgb.hex || DEFAULT_RGB_HEX),
+      });
       return;
     }
     if (state.warm?.on) {
@@ -350,7 +331,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return;
     }
     void this._run(async () => {
-      if (!this.hass || !this._directControl) {
+      if (!this.hass) {
         return;
       }
       await setEntityOnOff(this.hass, entityId, actual !== "on");

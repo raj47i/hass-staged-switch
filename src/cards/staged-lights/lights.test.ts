@@ -9,7 +9,7 @@ import {
   rowRoster,
   visibleLights,
 } from "./roster";
-import { lightsDirectControl, lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
+import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   alignedStageMaps,
   brightnessToPercent,
@@ -284,50 +284,6 @@ describe("look", () => {
     expect(
       resolveRgbPresets({ type: "custom:staged-lights-card", rgb_presets: ["#fff", "2196f3"] }),
     ).toEqual(["#ffffff", "#2196f3"]);
-  });
-
-  it("keeps direct control off unless explicitly enabled", () => {
-    expect(lightsDirectControl(undefined)).toBe(false);
-    expect(lightsDirectControl({ type: "custom:staged-lights-card" })).toBe(false);
-    expect(lightsDirectControl({ type: "custom:staged-lights-card", direct_control: false })).toBe(
-      false,
-    );
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: "false" as unknown as boolean,
-      }),
-    ).toBe(false);
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: 0 as unknown as boolean,
-      }),
-    ).toBe(false);
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: "yes" as unknown as boolean,
-      }),
-    ).toBe(true);
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: "true" as unknown as boolean,
-      }),
-    ).toBe(true);
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: "on" as unknown as boolean,
-      }),
-    ).toBe(true);
-    expect(
-      lightsDirectControl({
-        type: "custom:staged-lights-card",
-        direct_control: 1 as unknown as boolean,
-      }),
-    ).toBe(true);
   });
 
   it("resolves on/off and stage icons with fallbacks", () => {
