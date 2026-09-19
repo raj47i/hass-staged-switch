@@ -13,7 +13,7 @@ Use it when one control should represent a sequence, for example:
 - Fan low / medium / high using three switches
 - Irrigation zones that come on one after another
 
-The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It currently ships two cards: **Staged Switch Card** and **Staged Lights Card**.
+The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It currently ships three cards: **Staged Switch Card**, **Staged Lights Card**, and **Staged Lights Mini Card**.
 
 ## How to use it
 
@@ -377,7 +377,7 @@ white_stages:
 
 If you omit `warm_stages` / `white_stages`, each intensity is cumulative: Min turns the first light on, the next stage adds the next light, and Max turns the whole row on. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Mid / Max. Three or more default to all five names.
 
-The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1}}`. If the helper is missing, the card still remembers the last values in this browser.
+The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1},"l":"r"}`. `l` is the last RGB / Warm / White mode (`r`, `w`, or `n`), so Power can restore it after everything is off. If the helper is missing, the card still remembers the last values in this browser.
 
 Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
 
@@ -401,6 +401,31 @@ RGB, Warm, and White always turn their lights on and off. **Show entity buttons*
 
 RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
 
+## Staged Lights Mini Card
+
+The same RGB / Warm / White lighting, in two rows. There is no entity-chip option.
+
+1. **Mode group** — RGB, Warm, and White (only the rows you configured). Tapping the active mode turns it off; tapping it again, or another mode, turns that one on. The last mode is stored in the helper, so row 2 reloads from it.
+2. **Controls** — RGB shows brightness, presets, and the color picker. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
+
+It uses the same `input_text` JSON helper. You can point both lights cards at the same helper if you want a compact control and a full control for the same room.
+
+```yaml
+type: custom:staged-lights-mini-card
+entity: input_text.living_lights
+rgb:
+  - light.sofa_rgb
+  - light.cabinet_rgb
+warm:
+  - light.floor_lamp
+  - light.reading
+white:
+  - light.ceiling
+  - light.desk
+```
+
+The editor is the same multipage RGB / Warm / White setup as Staged Lights, without **Show entity buttons**. Options match the full lights card except `show_switches`, which this card ignores.
+
 ## Development
 
 ```bash
@@ -418,6 +443,7 @@ Layout:
 - `src/shared/` — helpers reused by every card in this package
 - `src/cards/staged-switch/` — staged switch card
 - `src/cards/staged-lights/` — staged lights card
+- `src/cards/staged-lights-mini/` — compact two-row lights card
 - `src/index.ts` — bundle entry; import another card module here to add it
 
 Requirements: Node.js 20 or newer.
@@ -427,7 +453,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.5-beta`.
+2. Commit and tag, for example `v0.0.6-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

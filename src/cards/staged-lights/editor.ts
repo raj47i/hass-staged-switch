@@ -604,6 +604,10 @@ export class StagedLightsCardEditor extends LitElement {
     `;
   }
 
+  protected get _entityButtonsEnabled(): boolean {
+    return true;
+  }
+
   private _checkboxChecked(ev: Event): boolean {
     const target = (ev.currentTarget ?? ev.target) as { checked?: boolean } | null;
     return Boolean(target?.checked);
@@ -626,14 +630,19 @@ export class StagedLightsCardEditor extends LitElement {
         length to 255.
       </span>
 
-      <div class="inline">
-        <span class="label">Show entity buttons</span>
-        <input
-          type="checkbox"
-          .checked=${Boolean(config.show_switches)}
-          @change=${(ev: Event) => this._update({ show_switches: this._checkboxChecked(ev) })}
-        />
-      </div>
+      ${this._entityButtonsEnabled
+        ? html`
+            <div class="inline">
+              <span class="label">Show entity buttons</span>
+              <input
+                type="checkbox"
+                .checked=${Boolean(config.show_switches)}
+                @change=${(ev: Event) =>
+                  this._update({ show_switches: this._checkboxChecked(ev) })}
+              />
+            </div>
+          `
+        : nothing}
     `;
   }
 

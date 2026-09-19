@@ -16,6 +16,11 @@
         --state-icon-active-color: #fdd835;
         --state-switch-active-color: #fdd835;
         --state-light-active-color: #fdd835;
+        --ha-font-size-m: 14px;
+        --ha-font-weight-medium: 500;
+        --ha-line-height-condensed: 20px;
+        --ha-control-border-radius: 10px;
+        --disabled-color: #9e9e9e;
       }
       body {
         margin: 0;
@@ -148,6 +153,7 @@
           <staged-switch-card id="many"></staged-switch-card>
           <staged-switch-card id="card"></staged-switch-card>
           <staged-lights-card id="lights"></staged-lights-card>
+          <staged-lights-mini-card id="lights-mini"></staged-lights-mini-card>
         </div>
       </section>
     </main>
@@ -301,11 +307,13 @@
         card.hass = next;
         many.hass = next;
         lights.hass = next;
+        lightsMini.hass = next;
       };
 
       const card = document.getElementById("card");
       const many = document.getElementById("many");
       const lights = document.getElementById("lights");
+      const lightsMini = document.getElementById("lights-mini");
       const hass = {
         language: "en",
         localize: (key) => key,
@@ -363,6 +371,13 @@
       });
       lights.setConfig({
         type: "custom:staged-lights-card",
+        entity: "input_text.living_lights",
+        rgb: ["light.sofa_rgb", "light.cabinet_rgb"],
+        warm: ["light.floor_lamp", "light.reading"],
+        white: ["light.ceiling", "light.desk", "light.porch"],
+      });
+      lightsMini.setConfig({
+        type: "custom:staged-lights-mini-card",
         entity: "input_text.living_lights",
         rgb: ["light.sofa_rgb", "light.cabinet_rgb"],
         warm: ["light.floor_lamp", "light.reading"],

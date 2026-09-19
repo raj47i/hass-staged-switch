@@ -5,3 +5,4 @@
  */
 import "./cards/staged-switch";
 import "./cards/staged-lights";
+import "./cards/staged-lights-mini";

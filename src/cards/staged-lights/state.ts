@@ -8,10 +8,30 @@ import { normalizeHex } from "./color";
 import { stageToBrightness } from "./stages";
 import type { LightRowId, LightsCardState, RgbRowState, StageRowState } from "./types";
 
+const LAST_KEY: Record<LightRowId, "r" | "w" | "n"> = {
+  rgb: "r",
+  warm: "w",
+  white: "n",
+};
+
+const parseLast = (value: unknown): LightRowId | undefined => {
+  if (value === "rgb" || value === "r") {
+    return "rgb";
+  }
+  if (value === "warm" || value === "w") {
+    return "warm";
+  }
+  if (value === "white" || value === "n") {
+    return "white";
+  }
+  return undefined;
+};
+
 const defaultState = (): LightsCardState => ({
   rgb: { on: true, brightness: DEFAULT_RGB_BRIGHTNESS, hex: DEFAULT_RGB_HEX },
   warm: { on: false, stage: 1 },
   white: { on: false, stage: 1 },
+  last: "rgb",
 });
 
 const parseFlag = (value: unknown, fallback: boolean): boolean => {
@@ -84,6 +104,7 @@ export const exclusiveLightsState = (
       ...(active === "white" ? patch : undefined),
       on: active === "white",
     },
+    last: active ?? base.last ?? activeLightRow(base),
   };
 };
 
@@ -99,6 +120,9 @@ export const activeLightRow = (state?: LightsCardState): LightRowId | undefined 
   }
   return undefined;
 };
+
+export const lastLightRow = (state?: LightsCardState): LightRowId | undefined =>
+  activeLightRow(state) ?? state?.last;
 
 export const isLightsHelperPayload = (raw?: string): boolean => {
   if (typeof raw !== "string") {
@@ -131,6 +155,7 @@ export const parseLightsState = (raw?: string): LightsCardState => {
       },
       warm: parseStage(parsed.w ?? parsed.warm, fallback.warm.stage, false),
       white: parseStage(parsed.n ?? parsed.white, fallback.white.stage, false),
+      last: parseLast(parsed.l ?? parsed.last),
     };
     return exclusiveLightsState(next, activeLightRow(next));
   } catch {
@@ -141,6 +166,7 @@ export const parseLightsState = (raw?: string): LightsCardState => {
 export const serializeLightsState = (state?: LightsCardState): string => {
   const source = state ?? defaultState();
   const exclusive = exclusiveLightsState(source, activeLightRow(source));
+  const last = lastLightRow(exclusive);
   return JSON.stringify({
     r: {
       o: exclusive.rgb.on ? 1 : 0,
@@ -155,5 +181,6 @@ export const serializeLightsState = (state?: LightsCardState): string => {
       o: exclusive.white.on ? 1 : 0,
       s: clamp(Math.round(Number(exclusive.white.stage)) || 1, 1, MAX_LIGHT_STAGES),
     },
+    ...(last ? { l: LAST_KEY[last] } : {}),
   });
 };

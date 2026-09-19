@@ -68,6 +68,9 @@ export const visibleLights = (config?: StagedLightsCardConfig): SwitchTarget[] =
 export const allLightIds = (config?: StagedLightsCardConfig): string[] =>
   allRosterItems(config).map((item) => item.entity);
 
+export const isLightsCardConfig = (config: unknown): config is StagedLightsCardConfig =>
+  typeof config === "object" && config !== null && !Array.isArray(config);
+
 export const isEmptyLightsConfig = (config?: StagedLightsCardConfig): boolean =>
   !config || !ROW_ORDER.some((row) => rowIsConfigured(config, row));
 

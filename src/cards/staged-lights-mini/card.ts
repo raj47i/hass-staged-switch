@@ -1,60 +1,51 @@
 import { LitElement, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
-  chunkEvenly,
   clamp,
   DOCUMENTATION_URL,
-  domainOf,
-  entityDisplayName,
-  entityIcon,
-  entityStateLabel,
   errorMessage,
   isValidEntityId,
   registerLovelaceCard,
   relevantHassChanged,
   rowFillPercent,
   SerialActionQueue,
-  setEntityOnOff,
   setInputText,
 } from "../../shared";
-import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
-import { normalizeHex } from "./color";
-import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
-import {
-  CARD_NAME,
-  CARD_TITLE,
-  DEFAULT_RGB_HEX,
-  ROW_META,
-  ROW_ORDER,
-} from "./const";
-import "./editor";
-import { applyLightsMode } from "./apply";
-import { lightsStorageKey, resolveLightsState, writeStoredLightsState } from "./persist";
+import type { HomeAssistant, LovelaceCard } from "../../shared/types";
+import { normalizeHex } from "../staged-lights/color";
+import { DEFAULT_RGB_HEX } from "../staged-lights/const";
+import { applyLightsMode } from "../staged-lights/apply";
+import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "../staged-lights/look";
+import { lightsStorageKey, resolveLightsState, writeStoredLightsState } from "../staged-lights/persist";
 import {
   isEmptyLightsConfig,
   isLightsCardConfig,
   relevantLightEntityIds,
-  visibleLights,
-} from "./roster";
+} from "../staged-lights/roster";
 import {
-  configuredRows,
   displayRgbPercent,
   intensityNames,
-  lightsLayoutRows,
   lightsStageCount,
   parseRgbPercent,
   percentToBrightness,
-} from "./stages";
-import { exclusiveLightsState, serializeLightsState } from "./state";
+} from "../staged-lights/stages";
+import { exclusiveLightsState, serializeLightsState } from "../staged-lights/state";
+import type { LightRowId, LightsCardState, StagedLightsCardConfig } from "../staged-lights/types";
+import { CARD_NAME, CARD_TITLE } from "./const";
+import "./editor";
+import {
+  MINI_LAYOUT_ROWS,
+  miniControlRow,
+  miniModeMeta,
+  miniModeOn,
+  miniModes,
+  miniShowcaseModes,
+  miniToggleTarget,
+} from "./layout";
 import { cardStyles } from "./styles";
-import type {
-  LightRowId,
-  LightsCardState,
-  StagedLightsCardConfig,
-} from "./types";
 
 @customElement(CARD_NAME)
-export class StagedLightsCard extends LitElement implements LovelaceCard {
+export class StagedLightsMiniCard extends LitElement implements LovelaceCard {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: StagedLightsCardConfig;
   @state() private _state?: LightsCardState;
@@ -73,7 +64,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       rgb: [],
       warm: [],
       white: [],
-      show_switches: false,
     };
   }
 
@@ -81,7 +71,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     if (!isLightsCardConfig(config)) {
       throw new Error("Invalid configuration");
     }
-    this._config = { ...config };
+    this._config = { ...config, show_switches: false };
     this._state = undefined;
     this._rgbDragPercent = undefined;
     this._queue.clear();
@@ -89,7 +79,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   public getCardSize(): number {
-    return lightsLayoutRows(this._config);
+    return MINI_LAYOUT_ROWS;
   }
 
   public getGridOptions() {
@@ -97,12 +87,12 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       columns: 12,
       min_columns: 6,
       max_columns: 12,
-      min_rows: lightsLayoutRows(this._config),
+      min_rows: MINI_LAYOUT_ROWS,
     };
   }
 
   private get _storageKey() {
-    return lightsStorageKey(this._config);
+    return lightsStorageKey(this._config, CARD_NAME);
   }
 
   private get _helper() {
@@ -120,19 +110,16 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     return resolveLightsState(this._helper?.state, this._storageKey);
   }
 
+  private get _modes(): LightRowId[] {
+    return miniModes(this._config);
+  }
+
+  private get _controlRow(): LightRowId | undefined {
+    return miniControlRow(this._current, this._config);
+  }
+
   private _stageCount(row: "warm" | "white") {
     return lightsStageCount(this._config, row);
-  }
-
-  private get _rows(): LightRowId[] {
-    return configuredRows(this._config);
-  }
-
-  private get _visibleEntities() {
-    if (!this._config?.show_switches) {
-      return [];
-    }
-    return visibleLights(this._config);
   }
 
   protected shouldUpdate(changed: PropertyValues): boolean {
@@ -205,13 +192,17 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     });
   }
 
-  private _toggleRow(row: LightRowId): void {
-    const current = this._current;
-    this._commit(exclusiveLightsState(current, current[row]?.on ? undefined : row));
+  private _selectMode(mode: LightRowId): void {
+    if (!this._modes.includes(mode)) {
+      return;
+    }
+    this._commit(
+      exclusiveLightsState(this._current, miniToggleTarget(mode, this._current, this._config)),
+    );
   }
 
   private _selectStage(row: "warm" | "white", stage: number): void {
-    if (!Number.isFinite(stage)) {
+    if (!Number.isFinite(stage) || !this._modes.includes(row)) {
       return;
     }
     this._commit(
@@ -222,6 +213,9 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   private _setRgb(patch: Partial<LightsCardState["rgb"]>): void {
+    if (!this._modes.includes("rgb")) {
+      return;
+    }
     this._commit(exclusiveLightsState(this._current, "rgb", patch));
   }
 
@@ -250,8 +244,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   private _onPreset(hex: string): void {
-    const color = normalizeHex(hex, DEFAULT_RGB_HEX);
-    this._setRgb({ on: true, hex: color });
+    this._setRgb({ on: true, hex: normalizeHex(hex, DEFAULT_RGB_HEX) });
   }
 
   private _onCustomColor(ev: Event): void {
@@ -262,55 +255,27 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     this._onPreset(target.value);
   }
 
-  private _entityActual(entityId: string): string {
-    return entityStateLabel(this.hass?.states?.[entityId]?.state);
-  }
-
-  private _onChip(entityId: string, actual: string): void {
-    if (!isValidEntityId(entityId) || (actual !== "on" && actual !== "off")) {
-      return;
-    }
-    void this._run(async () => {
-      if (!this.hass) {
-        return;
-      }
-      await setEntityOnOff(this.hass, entityId, actual !== "on");
-    });
-  }
-
-  private _renderChip(target: SwitchTarget) {
-    const stateObj = this.hass?.states?.[target.entity];
-    const actual = this._entityActual(target.entity);
-    const name = entityDisplayName(this.hass, target.entity, target.name);
-    const disabled = actual === "missing" || actual === "unavailable" || actual === "unknown";
+  private _renderModeButton(mode: LightRowId, showcase = false) {
+    const on = miniModeOn(mode, this._current, this._config);
+    const meta = miniModeMeta(mode);
+    const state = on ? "On" : "Off";
+    const icons = rowPowerIcons(this._config, mode);
     return html`
       <button
-        class="switch-status ${actual}"
-        style="--state-domain-active-color: var(--state-${domainOf(target.entity)}-active-color)"
+        class="power-icon ${on ? "on" : "off"}"
         type="button"
-        title=${`${name}: ${actual}`}
-        aria-label=${`${name}: ${actual}`}
-        ?disabled=${disabled}
-        @click=${() => this._onChip(target.entity, actual)}
+        aria-label="${meta.label} ${state}"
+        aria-pressed=${on}
+        @click=${showcase ? undefined : () => this._selectMode(mode)}
       >
-        ${stateObj
-          ? html`<ha-state-icon .hass=${this.hass} .stateObj=${stateObj} .icon=${target.icon}></ha-state-icon>`
-          : html`<ha-icon .icon=${entityIcon(target)}></ha-icon>`}
+        <span class="icon">
+          <ha-icon .icon=${on ? icons.on : icons.off}></ha-icon>
+        </span>
+        <span class="copy">
+          <span class="tick ${on ? "active" : ""}">${meta.label}</span>
+          <span class="state">${state}</span>
+        </span>
       </button>
-    `;
-  }
-
-  private _renderChips() {
-    const rows = chunkEvenly(this._visibleEntities);
-    if (!rows.length) {
-      return nothing;
-    }
-    return html`
-      <div class="switches">
-        ${rows.map(
-          (line) => html`<div class="switch-row">${line.map((item) => this._renderChip(item))}</div>`,
-        )}
-      </div>
     `;
   }
 
@@ -320,16 +285,16 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     current: number,
     on: boolean,
     label: string,
+    showcase: boolean,
   ) {
-    const meta = ROW_META[row];
+    const meta = miniModeMeta(row);
     return html`
-      <div class="slider-dot-slot" @click=${() => this._selectStage(row, stage)}>
+      <div
+        class="slider-dot-slot"
+        @click=${showcase ? undefined : () => this._selectStage(row, stage)}
+      >
         <button
-          class="slider-dot ${stage < current
-            ? "done"
-            : stage === current
-              ? "current"
-              : "todo"}"
+          class="slider-dot ${stage < current ? "done" : stage === current ? "current" : "todo"}"
           type="button"
           aria-label="${meta.label} ${label}"
           aria-pressed=${on && stage === current}
@@ -341,31 +306,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     `;
   }
 
-  private _rowIsOn(row: LightRowId): boolean {
-    return Boolean(this._current[row]?.on);
-  }
-
-  private _renderPower(row: LightRowId) {
-    const meta = ROW_META[row];
-    const on = this._rowIsOn(row);
-    const icons = rowPowerIcons(this._config, row);
-    return html`
-      <button
-        class="power-icon ${on ? "on" : "off"}"
-        type="button"
-        aria-label="${meta.label} power"
-        aria-pressed=${on}
-        @click=${() => this._toggleRow(row)}
-      >
-        <span class="icon">
-          <ha-icon .icon=${on ? icons.on : icons.off}></ha-icon>
-        </span>
-        <span class="tick ${on ? "active" : ""}">${meta.label}</span>
-      </button>
-    `;
-  }
-
-  private _renderRgbControls(showcase = false, rowIndex = 1) {
+  private _renderRgbControls(showcase: boolean, muted: boolean) {
     const rgb = this._current.rgb;
     const color = rgb?.hex || DEFAULT_RGB_HEX;
     const percent = displayRgbPercent(rgb?.brightness ?? 1, this._rgbDragPercent);
@@ -375,8 +316,8 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     );
     return html`
       <div
-        class="mode-controls rgb-controls ${lightsRowMuted(rgb?.on) ? "power-off" : ""}"
-        style="--current-color: ${color}; grid-row: ${rowIndex}"
+        class="mode-controls rgb-controls ${muted ? "power-off" : ""}"
+        style="--current-color: ${color}"
         aria-label="RGB brightness and color"
       >
         <input
@@ -399,7 +340,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
                 style="background: ${hex}"
                 aria-label="RGB color ${hex}"
                 aria-pressed=${selectedPreset === hex}
-                @click=${() => this._onPreset(hex)}
+                @click=${showcase ? undefined : () => this._onPreset(hex)}
               ></button>
             `,
           )}
@@ -418,20 +359,20 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     `;
   }
 
-  private _renderStageControls(row: "warm" | "white", rowIndex = 1) {
-    const meta = ROW_META[row];
+  private _renderStageControls(row: "warm" | "white", showcase: boolean, muted: boolean) {
+    const meta = miniModeMeta(row);
     const count = this._stageCount(row);
     const names = intensityNames(count);
     const rowState = this._current[row];
-    const current = clamp(Math.round(rowState?.stage ?? 1), 1, count);
+    const current = clamp(Math.round(Number(rowState?.stage) || 1), 1, count);
     const fill = rowFillPercent(
       Array.from({ length: count }, (_, index) => index + 1),
       current,
     );
     return html`
       <div
-        class="mode-controls stage-controls ${lightsRowMuted(rowState?.on) ? "power-off" : ""}"
-        style="--slider-progress: ${fill}%; --stage-count: ${count}; grid-row: ${rowIndex}"
+        class="mode-controls stage-controls ${muted ? "power-off" : ""}"
+        style="--slider-progress: ${fill}%; --stage-count: ${count}"
         aria-label="${meta.label} intensity"
       >
         <div class="stage-track">
@@ -440,41 +381,41 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
             <div class="slider-fill"></div>
           </div>
           ${names.map((label, index) =>
-            this._renderStageDot(row, index + 1, current, Boolean(rowState?.on), label),
+            this._renderStageDot(
+              row,
+              index + 1,
+              current,
+              Boolean(rowState?.on),
+              label,
+              showcase,
+            ),
           )}
         </div>
       </div>
     `;
   }
 
-  private _renderModeGroup(showcase = false) {
-    const rows = showcase ? ROW_ORDER : this._rows;
-    return html`
-      <div class="mode-group" style="--mode-rows: ${rows.length}">
-        <div class="power-bar">
-          ${rows.map((row) => this._renderPower(row))}
-        </div>
-        ${rows.map((row, index) =>
-          row === "rgb"
-            ? this._renderRgbControls(showcase, index + 1)
-            : this._renderStageControls(row, index + 1),
-        )}
-        ${rows.slice(0, -1).map(
-          (_row, index) => html`
-            <div class="mode-rule" style="grid-row: ${index + 1}" aria-hidden="true"></div>
-          `,
-        )}
-      </div>
-    `;
+  private _renderControls(showcase = false) {
+    const row = showcase ? "rgb" : this._controlRow;
+    if (!row) {
+      return nothing;
+    }
+    const muted = showcase ? false : lightsRowMuted(this._current[row]?.on);
+    if (row === "rgb") {
+      return this._renderRgbControls(showcase, muted);
+    }
+    return this._renderStageControls(row, showcase, muted);
   }
 
-  private _renderShowcase() {
+  private _renderCard(showcase = false) {
+    const modes = showcase ? miniShowcaseModes() : this._modes;
     return html`
-      <ha-card class="showcase">
-        <div class="slider-section">
-          ${this._renderModeGroup(true)}
+      <div class="slider-section">
+        <div class="mode-bar" role="group" aria-label="Light mode" style="--mode-count: ${modes.length}">
+          ${modes.map((mode) => this._renderModeButton(mode, showcase))}
         </div>
-      </ha-card>
+        <div class="control-row">${this._renderControls(showcase)}</div>
+      </div>
     `;
   }
 
@@ -483,7 +424,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return html`<ha-card><div class="warning">Invalid configuration</div></ha-card>`;
     }
     if (isEmptyLightsConfig(this._config)) {
-      return this._renderShowcase();
+      return html`<ha-card class="showcase">${this._renderCard(true)}</ha-card>`;
     }
     if (!this.hass) {
       return html`<ha-card><div class="warning">Waiting for Home Assistant</div></ha-card>`;
@@ -501,10 +442,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
               remember the last colors and stages.
             </div>`
           : nothing}
-        <div class="slider-section">
-          ${this._renderModeGroup()}
-          ${this._renderChips()}
-        </div>
+        ${this._renderCard()}
       </ha-card>
     `;
   }
@@ -516,13 +454,13 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "Room lights as exclusive rows: RGB brightness and color presets, plus Warm and White stages (Min to Max) when each has at least two lights. One text helper stores the whole card.",
+    "A compact lights card: RGB, Warm, and White on one row, with stages or color presets on the second.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
 
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-lights-card": StagedLightsCard;
+    "staged-lights-mini-card": StagedLightsMiniCard;
   }
 }

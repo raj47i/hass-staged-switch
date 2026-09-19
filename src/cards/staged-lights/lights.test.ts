@@ -4,6 +4,7 @@ import {
   allLightIds,
   configuredRosterItems,
   isEmptyLightsConfig,
+  isLightsCardConfig,
   relevantLightEntityIds,
   rowIsConfigured,
   rowRoster,
@@ -40,6 +41,8 @@ import {
   parseLightsState,
   serializeLightsState,
 } from "./state";
+import { applyLightsMode, rowEntityIds } from "./apply";
+import type { HomeAssistant } from "../../shared/types";
 
 describe("color helpers", () => {
   it("round-trips hex and rgb", () => {
@@ -62,6 +65,7 @@ describe("lights JSON state", () => {
       rgb: { on: true, brightness: 180, hex: "#2196f3" },
       warm: { on: false, stage: 2 },
       white: { on: false, stage: 1 },
+      last: "rgb" as const,
     };
     const raw = serializeLightsState(state);
     expect(raw.length).toBeLessThan(255);
@@ -77,6 +81,7 @@ describe("lights JSON state", () => {
     expect(parsed.rgb.brightness).toBe(180);
     expect(parsed.warm).toEqual({ on: false, stage: 2 });
     expect(parsed.white).toEqual({ on: false, stage: 1 });
+    expect(parsed.last).toBe("rgb");
   });
 
   it("falls back when the helper is empty or invalid", () => {
@@ -88,6 +93,7 @@ describe("lights JSON state", () => {
     expect(parseLightsState(undefined).rgb.on).toBe(true);
     expect(serializeLightsState(undefined)).toContain('"o":1');
     expect(exclusiveLightsState(undefined, "white")?.white.on).toBe(true);
+    expect(exclusiveLightsState(undefined, "white")?.last).toBe("white");
   });
 
   it("turns a different row on exclusively", () => {
@@ -156,6 +162,17 @@ describe("lights JSON state", () => {
       rgb: { on: false, brightness: 180, hex: "#ff8a1d" },
       warm: { on: false, stage: 1 },
       white: { on: true, stage: 5 },
+      last: "white",
+    });
+    expect(
+      parseLightsState(
+        '{"r":{"o":0,"b":40,"c":"#2196f3"},"w":{"o":0,"s":3},"n":{"o":0,"s":2},"l":"w"}',
+      ),
+    ).toEqual({
+      rgb: { on: false, brightness: 40, hex: "#2196f3" },
+      warm: { on: false, stage: 3 },
+      white: { on: false, stage: 2 },
+      last: "warm",
     });
     expect(intensityName(Number.NaN, Number.NaN)).toBe("Min");
     expect(intensityName(0, 3)).toBe("Min");
@@ -316,6 +333,12 @@ describe("lights roster", () => {
     };
     expect(rowRoster(config, "rgb").map((item) => item.entity)).toEqual(["light.rgb_1"]);
     expect(isEmptyLightsConfig({ type: "custom:staged-lights-card" })).toBe(true);
+    expect(isEmptyLightsConfig(undefined)).toBe(true);
+    expect(isLightsCardConfig(undefined)).toBe(false);
+    expect(isLightsCardConfig(null)).toBe(false);
+    expect(isLightsCardConfig([])).toBe(false);
+    expect(isLightsCardConfig("nope")).toBe(false);
+    expect(isLightsCardConfig({ type: "custom:staged-lights-card" })).toBe(true);
     expect(isEmptyLightsConfig(config)).toBe(false);
     expect(
       isEmptyLightsConfig({
@@ -497,6 +520,9 @@ describe("edge cases", () => {
     expect(resolveLightsState("unavailable", key).warm).toEqual({ on: true, stage: 2 });
     expect(resolveLightsState("unknown", key).rgb.on).toBe(false);
     expect(resolveLightsState("", key).warm.stage).toBe(2);
+    expect(resolveLightsState(null, key).warm.stage).toBe(2);
+    expect(resolveLightsState(12, key).warm.stage).toBe(2);
+    expect(resolveLightsState({ r: { o: 1 } }, key).warm.stage).toBe(2);
     expect(resolveLightsState('{"r":{"o":1,"b":40,"c":"#2196f3"}}', key).rgb).toEqual({
       on: true,
       brightness: 40,
@@ -526,6 +552,16 @@ describe("edge cases", () => {
     });
     const key = lightsStorageKey({ type: "custom:staged-lights-card", entity: "input_text.room" });
     expect(key).toBe("staged-lights-card:input_text.room");
+    expect(lightsStorageKey(undefined)).toBe("staged-lights-card:default");
+    expect(
+      lightsStorageKey({ type: "custom:staged-lights-card", entity: "", title: "" }),
+    ).toBe("staged-lights-card:default");
+    expect(
+      lightsStorageKey(
+        { type: "custom:staged-lights-card", entity: "input_text.room" },
+        "staged-lights-mini-card",
+      ),
+    ).toBe("staged-lights-mini-card:input_text.room");
     expect(readStoredLightsState(key)).toBeUndefined();
     writeStoredLightsState(key, {
       rgb: { on: false, brightness: 90, hex: "#ffffff" },
@@ -564,5 +600,118 @@ describe("edge cases", () => {
     expect(parsed.warm.stage).toBe(5);
     expect(parsed.rgb.brightness).toBe(180);
     expect(parsed.rgb.hex).toBe("#ff8a1d");
+  });
+});
+
+describe("applyLightsMode", () => {
+  const hassStub = (
+    calls: Array<{ domain: string; service: string; data?: unknown }>,
+  ): HomeAssistant => ({
+    language: "en",
+    localize: (key: string) => key,
+    states: {},
+    callService: async (domain, service, data) => {
+      calls.push({ domain, service, data });
+    },
+  });
+
+  const config = {
+    type: "custom:staged-lights-card",
+    stages: 3,
+    rgb: ["light.sofa", "light.sofa", "", "not-an-id"],
+    warm: ["light.floor", "light.reading", "switch.sconce"],
+    white: ["light.ceiling", "light.desk"],
+  };
+
+  it("ignores missing hass, state, and empty ids", async () => {
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    await applyLightsMode(undefined, config, parseLightsState());
+    await applyLightsMode(hassStub(calls), config, undefined);
+    await applyLightsMode(hassStub(calls), undefined, exclusiveLightsState(undefined, "rgb"));
+    expect(calls).toEqual([]);
+    expect(rowEntityIds(undefined, "rgb")).toEqual([]);
+    expect(rowEntityIds(config)).toEqual([]);
+    expect(rowEntityIds(config, "rgb")).toEqual(["light.sofa"]);
+  });
+
+  it("turns every mapped entity off when no row is on", async () => {
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    await applyLightsMode(
+      hassStub(calls),
+      config,
+      exclusiveLightsState(parseLightsState(), undefined),
+    );
+    expect(calls).toEqual([
+      {
+        domain: "homeassistant",
+        service: "turn_off",
+        data: {
+          entity_id: [
+            "light.sofa",
+            "light.floor",
+            "light.reading",
+            "switch.sconce",
+            "light.ceiling",
+            "light.desk",
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("turns RGB on with a fallback color and turns the other rows off", async () => {
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    await applyLightsMode(
+      hassStub(calls),
+      config,
+      exclusiveLightsState(undefined, "rgb", { brightness: Number.NaN, hex: "" }),
+    );
+    expect(calls[0]).toEqual({
+      domain: "homeassistant",
+      service: "turn_off",
+      data: {
+        entity_id: [
+          "light.floor",
+          "light.reading",
+          "switch.sconce",
+          "light.ceiling",
+          "light.desk",
+        ],
+      },
+    });
+    expect(calls[1]).toEqual({
+      domain: "light",
+      service: "turn_on",
+      data: {
+        entity_id: ["light.sofa"],
+        brightness: 1,
+        rgb_color: [255, 138, 29],
+      },
+    });
+  });
+
+  it("applies a Warm stage mix and clamps a missing stage", async () => {
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    const state = exclusiveLightsState(undefined, "warm", { stage: Number.NaN });
+    await applyLightsMode(hassStub(calls), config, state);
+    expect(calls).toEqual([
+      {
+        domain: "homeassistant",
+        service: "turn_off",
+        data: {
+          entity_id: ["light.sofa", "light.ceiling", "light.desk"],
+        },
+      },
+      {
+        domain: "light",
+        service: "turn_on",
+        data: { entity_id: ["light.floor"], brightness: 85 },
+      },
+      {
+        domain: "homeassistant",
+        service: "turn_off",
+        data: { entity_id: ["light.reading", "switch.sconce"] },
+      },
+    ]);
   });
 });

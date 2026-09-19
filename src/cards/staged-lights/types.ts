@@ -51,6 +51,7 @@ export interface LightsCardState {
   rgb: RgbRowState;
   warm: StageRowState;
   white: StageRowState;
+  last?: LightRowId;
 }
 
 export type LightRowId = "rgb" | "warm" | "white";

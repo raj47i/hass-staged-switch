@@ -5,8 +5,10 @@ import { CARD_NAME } from "./const";
 import { isLightsHelperPayload, parseLightsState, serializeLightsState } from "./state";
 import type { LightsCardState, StagedLightsCardConfig } from "./types";
 
-export const lightsStorageKey = (config?: StagedLightsCardConfig): string =>
-  scopedStorageKey(CARD_NAME, config?.entity || config?.title);
+export const lightsStorageKey = (
+  config?: StagedLightsCardConfig,
+  cardName = CARD_NAME,
+): string => scopedStorageKey(cardName, config?.entity || config?.title);
 
 export const readStoredLightsState = (key: string): LightsCardState | undefined => {
   try {
