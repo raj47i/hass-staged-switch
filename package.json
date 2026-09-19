@@ -1,0 +1,44 @@
+{
+  "name": "staged-switch-card",
+  "version": "0.0.1-beta",
+  "description": "Home Assistant Lovelace card to control multiple switches sequentially via a staged slider",
+  "keywords": [
+    "home-assistant",
+    "homeassistant",
+    "hass",
+    "lovelace",
+    "custom-card",
+    "hacs"
+  ],
+  "author": "raj47i",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raj47i/hass-staged-switch.git"
+  },
+  "homepage": "https://github.com/raj47i/hass-staged-switch",
+  "type": "module",
+  "module": "dist/staged-switch-card.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lit": "^3.2.1"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "rollup": "^4.34.8",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.8"
+  }
+}

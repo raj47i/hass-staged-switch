@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Staged Switch preview</title>
+    <style>
+      :root {
+        --primary-color: #03a9f4;
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --card-background-color: #fff;
+        --ha-card-background: #fff;
+        --state-inactive-color: #9e9e9e;
+        --state-active-color: #fdd835;
+        --state-icon-active-color: #fdd835;
+        --state-switch-active-color: #fdd835;
+        --state-light-active-color: #fdd835;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: Roboto, system-ui, sans-serif;
+        background: #f4f6f8;
+      }
+      ha-card {
+        display: block;
+        max-width: 720px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      }
+    </style>
+    <script>
+      const PATHS = {
+        "mdi:power":
+          "M16.56 5.44 15.11 6.89A6.18 6.18 0 0 1 18 11.72a6.14 6.14 0 1 1-12.28 0 6.18 6.18 0 0 1 2.89-4.83L7.16 5.44A8.16 8.16 0 0 0 3.72 11.72a8.15 8.15 0 1 0 16.3 0 8.16 8.16 0 0 0-3.46-6.28M11.86 3.87h1v6.85h-1z",
+        "mdi:toggle-switch":
+          "M17 7H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10m0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6",
+        "mdi:lightbulb":
+          "M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21v1a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z",
+        "mdi:fan":
+          "M12 11a1 1 0 1 0 1 1 1 1 0 0 0-1-1m.5-9C16.14 2 19 4.69 19 8c0 1.55-.58 3-1.56 4.1l1.66 3.61A8.28 8.28 0 0 1 12.5 22C7.81 22 4 18.42 4 14c0-2.39 1.14-4.52 2.91-5.91L8.5 4.5A7.47 7.47 0 0 1 12.5 2z",
+        "mdi:circle-medium":
+          "M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4z",
+      };
+      class HaIcon extends HTMLElement {
+        set icon(value) {
+          const d = PATHS[value] || PATHS["mdi:power"];
+          this.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="${d}"></path></svg>`;
+        }
+      }
+      class HaStateIcon extends HTMLElement {
+        set hass(_value) {}
+        set icon(value) {
+          this._icon = value;
+          this._render();
+        }
+        set stateObj(value) {
+          this._stateObj = value;
+          this._render();
+        }
+        _render() {
+          const entityId = this._stateObj?.entity_id || "";
+          const icon =
+            this._icon ||
+            (entityId.startsWith("fan.")
+              ? "mdi:fan"
+              : entityId.startsWith("light.")
+                ? "mdi:lightbulb"
+                : "mdi:toggle-switch");
+          const d = PATHS[icon] || PATHS["mdi:power"];
+          this.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="${d}"></path></svg>`;
+        }
+      }
+      customElements.define("ha-icon", HaIcon);
+      customElements.define("ha-state-icon", HaStateIcon);
+    </script>
+    <script type="module" src="/dist/staged-switch-card.js"></script>
+  </head>
+  <body>
+    <staged-switch-card id="card"></staged-switch-card>
+    <script type="module">
+      const states = {
+        "input_number.patio_stage": {
+          entity_id: "input_number.patio_stage",
+          state: "2",
+          attributes: { min: 0, max: 3, step: 1 },
+          last_changed: "",
+          last_updated: "",
+        },
+        "input_boolean.patio_power": {
+          entity_id: "input_boolean.patio_power",
+          state: "on",
+          attributes: {},
+          last_changed: "",
+          last_updated: "",
+        },
+        "switch.fan": {
+          entity_id: "switch.fan",
+          state: "on",
+          attributes: { friendly_name: "Fan" },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.string": {
+          entity_id: "light.string",
+          state: "on",
+          attributes: { friendly_name: "String lights" },
+          last_changed: "",
+          last_updated: "",
+        },
+        "switch.heater": {
+          entity_id: "switch.heater",
+          state: "off",
+          attributes: { friendly_name: "Heater" },
+          last_changed: "",
+          last_updated: "",
+        },
+      };
+
+      const applyStage = (stage) => {
+        states["input_number.patio_stage"].state = String(stage);
+        if (states["input_boolean.patio_power"].state !== "on") {
+          states["switch.fan"].state = "off";
+          states["light.string"].state = "off";
+          states["switch.heater"].state = "off";
+          return;
+        }
+        states["switch.fan"].state = stage >= 1 ? "on" : "off";
+        states["light.string"].state = stage >= 2 ? "on" : "off";
+        states["switch.heater"].state = stage >= 3 ? "on" : "off";
+      };
+
+      const card = document.getElementById("card");
+      const hass = {
+        language: "en",
+        localize: (key) => key,
+        states,
+        async callService(_domain, service, data) {
+          const ids = Array.isArray(data?.entity_id)
+            ? data.entity_id
+            : data?.entity_id
+              ? [data.entity_id]
+              : [];
+          if (ids.includes("input_number.patio_stage")) {
+            applyStage(Number(data.value));
+          } else if (ids.includes("input_boolean.patio_power")) {
+            states["input_boolean.patio_power"].state =
+              service === "turn_on" ? "on" : "off";
+            applyStage(Number(states["input_number.patio_stage"].state));
+          } else {
+            ids.forEach((id) => {
+              if (states[id]) {
+                states[id].state = service === "turn_on" ? "on" : "off";
+              }
+            });
+          }
+          card.hass = { ...hass, states };
+        },
+      };
+
+      card.setConfig({
+        type: "custom:staged-switch-card",
+        title: "Patio",
+        entity: "input_number.patio_stage",
+        power_entity: "input_boolean.patio_power",
+        stage_names: ["Off", "Fan", "String lights", "Heater"],
+        switches: ["switch.fan", "light.string", "switch.heater"],
+      });
+      applyStage(2);
+      card.hass = hass;
+    </script>
+  </body>
+</html>
