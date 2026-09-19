@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { hexToHue, hexToRgb, hueToHex, rgbToHex } from "./color";
 import {
   allLightIds,
+  configuredRosterItems,
   isEmptyLightsConfig,
   relevantLightEntityIds,
   rowIsConfigured,
   rowRoster,
   visibleLights,
 } from "./roster";
-import { lightsDirectControl, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
+import { lightsDirectControl, lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   alignedStageMaps,
   brightnessToPercent,
@@ -16,7 +17,6 @@ import {
   displayRgbPercent,
   intensityName,
   intensityNames,
-  lightsHeaderValue,
   lightsLayoutRows,
   lightsStageCount,
   maxRowStages,
@@ -98,6 +98,68 @@ describe("lights JSON state", () => {
     expect(next.warm).toEqual({ on: true, stage: 3 });
     expect(exclusiveLightsState(next).rgb.on).toBe(false);
     expect(exclusiveLightsState(next).warm.on).toBe(false);
+  });
+
+  it("greys every row when none is on and remembers last values", () => {
+    expect(lightsRowMuted(true)).toBe(false);
+    expect(lightsRowMuted(false)).toBe(true);
+    expect(lightsRowMuted(undefined)).toBe(true);
+    expect(lightsRowMuted(0)).toBe(true);
+    const rgbOn = parseLightsState(
+      '{"r":{"o":1,"b":90,"c":"#ffffff"},"w":{"o":0,"s":2},"n":{"o":0,"s":4}}',
+    );
+    expect(lightsRowMuted(rgbOn.rgb.on)).toBe(false);
+    expect(lightsRowMuted(rgbOn.warm.on)).toBe(true);
+    expect(lightsRowMuted(rgbOn.white.on)).toBe(true);
+    const allOff = exclusiveLightsState(rgbOn, undefined);
+    expect(activeLightRow(allOff)).toBeUndefined();
+    expect(lightsRowMuted(allOff.rgb.on)).toBe(true);
+    expect(allOff.rgb).toEqual({ on: false, brightness: 90, hex: "#ffffff" });
+    expect(allOff.warm).toEqual({ on: false, stage: 2 });
+    expect(allOff.white).toEqual({ on: false, stage: 4 });
+    expect(parseLightsState(serializeLightsState(allOff))).toEqual(allOff);
+  });
+
+  it("activates a greyed row from a stage, preset, or power toggle", () => {
+    const allOff = exclusiveLightsState(parseLightsState(), undefined);
+    const fromStage = exclusiveLightsState(allOff, "white", { stage: 4 });
+    expect(activeLightRow(fromStage)).toBe("white");
+    expect(fromStage.white.stage).toBe(4);
+    expect(lightsRowMuted(fromStage.rgb.on)).toBe(true);
+    const fromPreset = exclusiveLightsState(fromStage, "rgb", { hex: "#7ea6ff" });
+    expect(fromPreset.rgb).toMatchObject({ on: true, hex: "#7ea6ff" });
+    expect(fromPreset.white).toEqual({ on: false, stage: 4 });
+    const toggledOff = exclusiveLightsState(
+      fromPreset,
+      fromPreset.rgb.on ? undefined : "rgb",
+    );
+    expect(activeLightRow(toggledOff)).toBeUndefined();
+    expect(toggledOff.rgb.hex).toBe("#7ea6ff");
+    const toggledOn = exclusiveLightsState(toggledOff, "rgb");
+    expect(toggledOn.rgb.on).toBe(true);
+    expect(toggledOn.rgb.hex).toBe("#7ea6ff");
+    expect(toggledOn.white.stage).toBe(4);
+    const brighter = exclusiveLightsState(toggledOn, "rgb", { brightness: 40 });
+    expect(brighter.rgb).toEqual({ on: true, brightness: 40, hex: "#7ea6ff" });
+    expect(brighter.white.stage).toBe(4);
+  });
+
+  it("keeps an all-off helper payload all-off", () => {
+    const parsed = parseLightsState(
+      '{"r":{"o":0,"b":40,"c":"#2196f3"},"w":{"o":0,"s":3},"n":{"o":0,"s":2}}',
+    );
+    expect(activeLightRow(parsed)).toBeUndefined();
+    expect(parsed.rgb).toEqual({ on: false, brightness: 40, hex: "#2196f3" });
+    expect(parsed.warm).toEqual({ on: false, stage: 3 });
+    expect(parsed.white).toEqual({ on: false, stage: 2 });
+    expect(parseLightsState('{"r":{"o":0},"n":{"o":1,"s":5}}')).toEqual({
+      rgb: { on: false, brightness: 180, hex: "#ff8a1d" },
+      warm: { on: false, stage: 1 },
+      white: { on: true, stage: 5 },
+    });
+    expect(intensityName(Number.NaN, Number.NaN)).toBe("Min");
+    expect(intensityName(0, 3)).toBe("Min");
+    expect(intensityName(9, 3)).toBe("Max");
   });
 });
 
@@ -242,9 +304,12 @@ describe("look", () => {
         direct_control: 0 as unknown as boolean,
       }),
     ).toBe(false);
-    expect(lightsDirectControl({ type: "custom:staged-lights-card", direct_control: true })).toBe(
-      true,
-    );
+    expect(
+      lightsDirectControl({
+        type: "custom:staged-lights-card",
+        direct_control: "yes" as unknown as boolean,
+      }),
+    ).toBe(true);
     expect(
       lightsDirectControl({
         type: "custom:staged-lights-card",
@@ -275,7 +340,7 @@ describe("look", () => {
       on: "mdi:palette",
       off: "mdi:palette-outline",
     });
-    expect(rowPowerIcons(config, "warm").on).toBe("mdi:weather-sunset");
+    expect(rowPowerIcons(config, "warm").on).toBe("mdi:lamp");
     expect(rowStageIcon(config, "warm", 1)).toBe("mdi:weather-night");
     expect(rowStageIcon(config, "white", 1)).toBe("mdi:circle-medium");
     expect(alignedStageMaps(config, "warm", [{ entity: "light.a" }])[0]?.icon).toBe(
@@ -309,6 +374,25 @@ describe("lights roster", () => {
       "switch.sconce",
       "light.ceiling",
       "input_text.living_lights",
+    ]);
+  });
+
+  it("dedupes shared entities and hides incomplete Warm/White rows", () => {
+    const config = {
+      type: "custom:staged-lights-card",
+      rgb: ["light.shared"],
+      warm: ["light.shared", "light.sconce"],
+      white: ["light.only"],
+    };
+    expect(allLightIds(config)).toEqual(["light.shared", "light.sconce", "light.only"]);
+    expect(configuredRosterItems(config).map((item) => item.entity)).toEqual([
+      "light.shared",
+      "light.sconce",
+    ]);
+    expect(configuredRows(config)).toEqual(["rgb", "warm"]);
+    expect(visibleLights(config).map((item) => item.entity)).toEqual([
+      "light.shared",
+      "light.sconce",
     ]);
   });
 });
@@ -385,7 +469,7 @@ describe("edge cases", () => {
     expect(() => alignedStageMaps(junk, "warm")).not.toThrow();
   });
 
-  it("parses slider percents and keeps RGB percent out of the header", () => {
+  it("parses slider percents for the RGB value next to the slider", () => {
     expect(parseRgbPercent(undefined)).toBeUndefined();
     expect(parseRgbPercent("")).toBe(1);
     expect(parseRgbPercent("nope")).toBeUndefined();
@@ -396,11 +480,6 @@ describe("edge cases", () => {
     expect(displayRgbPercent(180)).toBe(71);
     expect(displayRgbPercent(180, 40)).toBe(40);
     expect(displayRgbPercent(Number.NaN, Number.NaN)).toBe(1);
-    expect(lightsHeaderValue("rgb", 3, 5)).toBeUndefined();
-    expect(lightsHeaderValue("warm", 2, 3)).toBe("Mid");
-    expect(lightsHeaderValue("white", 3, 5)).toBe("Mid");
-    expect(lightsHeaderValue("white", 99, 5)).toBe("Max");
-    expect(lightsHeaderValue(undefined)).toBeUndefined();
     expect(brightnessToPercent(percentToBrightness(1))).toBe(1);
     expect(brightnessToPercent(percentToBrightness(70))).toBe(70);
     expect(brightnessToPercent(percentToBrightness(100))).toBe(100);
@@ -411,7 +490,7 @@ describe("edge cases", () => {
     expect(lightsLayoutRows({ type: "custom:staged-lights-card" })).toBe(4);
     expect(
       lightsLayoutRows({ type: "custom:staged-lights-card", rgb: ["light.sofa"] }),
-    ).toBe(4);
+    ).toBe(3);
     expect(
       lightsLayoutRows({
         type: "custom:staged-lights-card",
@@ -419,21 +498,21 @@ describe("edge cases", () => {
         warm: ["light.a", "light.b"],
         white: ["light.x", "light.y", "light.z"],
       }),
-    ).toBe(6);
+    ).toBe(5);
     expect(
       lightsLayoutRows({
         type: "custom:staged-lights-card",
         rgb: ["light.sofa"],
         show_switches: true,
       }),
-    ).toBe(5);
+    ).toBe(4);
     expect(
       lightsLayoutRows({
         type: "custom:staged-lights-card",
         rgb: ["light.sofa"],
         show_switches: false,
       }),
-    ).toBe(4);
+    ).toBe(3);
   });
 
   it("keeps the last remembered state when the helper is unavailable", () => {

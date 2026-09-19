@@ -29,10 +29,10 @@ export const applyToggleTargets = async (
   }
   const { on, off } = partitionTargets(targets);
   if (on.length) {
-    await hass.callService("homeassistant", "turn_on", { entity_id: on });
+    await hass.callService("homeassistant", "turn_on", { entity_id: on }, { entity_id: on });
   }
   if (off.length) {
-    await hass.callService("homeassistant", "turn_off", { entity_id: off });
+    await hass.callService("homeassistant", "turn_off", { entity_id: off }, { entity_id: off });
   }
 };
 
@@ -82,13 +82,26 @@ export const applyLightLooks = async (
   if (!hass || !enabled || !ids.length) {
     return;
   }
+  const target = { entity_id: ids };
   if (!look.on || look.brightness <= 0) {
-    await hass.callService("light", "turn_off", { entity_id: ids });
+    await hass.callService("light", "turn_off", { entity_id: ids }, target);
     return;
   }
-  await hass.callService("light", "turn_on", {
+  const data: Record<string, unknown> = {
     entity_id: ids,
     brightness: look.brightness,
-    ...(look.rgb ? { rgb_color: look.rgb } : {}),
-  });
+  };
+  if (look.rgb) {
+    data.rgb_color = look.rgb;
+  }
+  try {
+    await hass.callService("light", "turn_on", data, target);
+  } catch {
+    delete data.rgb_color;
+    try {
+      await hass.callService("light", "turn_on", data, target);
+    } catch {
+      await hass.callService("homeassistant", "turn_on", { entity_id: ids }, target);
+    }
+  }
 };

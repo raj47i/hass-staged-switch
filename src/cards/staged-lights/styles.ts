@@ -6,37 +6,15 @@ import {
 } from "../../shared/styles";
 
 const lightsStyles = css`
-  .stage-name {
-    margin-top: 2px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--primary-color);
-  }
-
-  .stage-value {
-    flex-shrink: 0;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--primary-color);
-    background: color-mix(
-      in srgb,
-      var(--primary-color) 14%,
-      var(--card-background-color, #fff)
-    );
-  }
-
   .slider-section {
     --slider-button-height: 64px;
     --slider-dot-size: 36px;
     --slider-track-height: 3px;
-    --slider-well-pad-x: 8px;
-    --power-button-size: 56px;
+    --power-button-size: 48px;
+    --power-icon-size: 36px;
     --slider-icon-size: 24px;
     --slider-dot-icon-size: 20px;
     --stage-label-gap: 3px;
-    --stage-label-height: 12px;
     --preset-height: 26px;
     --rgb-value-width: 36px;
     display: flex;
@@ -46,7 +24,7 @@ const lightsStyles = css`
     max-width: 100%;
     min-width: 0;
     margin: 0;
-    padding: 8px 16px 16px;
+    padding: 8px;
   }
 
   .mode-group {
@@ -57,21 +35,13 @@ const lightsStyles = css`
     column-gap: var(--mode-gap);
     row-gap: 0;
     align-items: stretch;
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     margin: 0;
-    padding: 8px var(--slider-well-pad-x);
-    border-radius: 8px;
-    background: var(
-      --slider-bar-background,
-      color-mix(
-        in srgb,
-        var(--primary-text-color) 8%,
-        var(--card-background-color, #fff)
-      )
-    );
+    padding: 0;
+    background: none;
   }
 
   .power-bar {
@@ -79,11 +49,8 @@ const lightsStyles = css`
     grid-row: 1 / span var(--mode-rows, 3);
     display: grid;
     grid-template-rows: subgrid;
-    overflow: hidden;
-    border-radius: 8px;
-    background: var(--card-background-color, #fff);
-    box-shadow: inset 0 0 0 1px
-      color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    overflow: visible;
+    background: none;
   }
 
   @supports not (grid-template-rows: subgrid) {
@@ -110,23 +77,71 @@ const lightsStyles = css`
     position: relative;
     display: flex;
     grid-column: 2;
+    align-items: center;
     align-self: stretch;
     overflow: hidden;
     min-width: 0;
     width: 100%;
     max-width: 100%;
+    height: 100%;
     padding: 0;
   }
 
-  .mode-controls.power-off .slider-fill,
-  .mode-controls.power-off .brightness {
-    opacity: 0.55;
+  .mode-controls.power-off .brightness,
+  .mode-controls.power-off .swatch,
+  .mode-controls.power-off .picker-wrap,
+  .mode-controls.power-off .picker-button {
+    filter: grayscale(1);
+    opacity: 0.38;
+  }
+
+  .mode-controls.power-off .brightness-value {
+    color: var(--secondary-text-color);
+    opacity: 0.45;
+  }
+
+  .mode-controls.power-off .slider-fill {
+    opacity: 0.28;
+    background: color-mix(in srgb, var(--primary-text-color) 40%, transparent);
+  }
+
+  .mode-controls.power-off .slider-dot,
+  .mode-controls.power-off .slider-dot.done,
+  .mode-controls.power-off .slider-dot.current,
+  .mode-controls.power-off .slider-dot.todo {
+    background-color: color-mix(
+      in srgb,
+      var(--primary-text-color) 8%,
+      var(--card-background-color, #fff)
+    );
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+    color: var(
+      --state-inactive-color,
+      var(--state-icon-color, var(--secondary-text-color, #9e9e9e))
+    );
+  }
+
+  .mode-controls.power-off .slider-dot.current {
+    background-color: color-mix(
+      in srgb,
+      var(--primary-text-color) 16%,
+      var(--card-background-color, #fff)
+    );
+  }
+
+  .mode-controls.power-off .tick,
+  .mode-controls.power-off .slider-dot-slot > .tick,
+  .mode-controls.power-off .slider-dot-slot > .tick.active {
+    color: var(--secondary-text-color);
+    opacity: 0.5;
   }
 
   .rgb-controls {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--rgb-value-width);
     grid-template-rows: auto auto;
+    align-content: center;
     align-items: center;
     column-gap: 6px;
     row-gap: 8px;
@@ -147,12 +162,19 @@ const lightsStyles = css`
   }
 
   .stage-controls {
-    align-items: center;
-    justify-content: space-between;
     min-width: 0;
     width: 100%;
     max-width: 100%;
     min-height: var(--slider-button-height);
+  }
+
+  .stage-track {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
   }
 
   .slider-visual {
@@ -165,9 +187,7 @@ const lightsStyles = css`
       calc(var(--slider-dot-size) / 2),
       calc(100% / (2 * var(--stage-count, 2)))
     );
-    top: calc(
-      50% - (var(--stage-label-gap) + var(--stage-label-height)) / 2
-    );
+    top: calc(var(--slider-dot-size) / 2);
     height: 0;
     pointer-events: none;
     z-index: 1;
@@ -185,7 +205,7 @@ const lightsStyles = css`
   }
 
   .slider-line {
-    background: var(--card-background-color, #fff);
+    background: color-mix(in srgb, var(--primary-text-color) 14%, transparent);
   }
 
   .slider-fill {
@@ -207,39 +227,51 @@ const lightsStyles = css`
     min-height: 0;
     height: auto;
     margin: 0;
-    padding: 6px;
+    padding: 0;
     border: 0;
     border-radius: 0;
     appearance: none;
     background: transparent;
     box-shadow: none;
-    color: var(
-      --state-inactive-color,
-      var(--state-icon-color, var(--secondary-text-color, #9e9e9e))
-    );
+    color: var(--secondary-text-color, #727272);
     cursor: pointer;
   }
 
   .power-icon.on {
+    color: var(--primary-text-color);
+    background: transparent;
+  }
+
+  .power-icon .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--power-icon-size);
+    height: var(--power-icon-size);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--primary-text-color) 12%, transparent);
     color: var(
-      --state-active-color,
-      var(
-        --state-icon-active-color,
-        var(--paper-item-icon-active-color, var(--primary-color))
-      )
-    );
-    background: color-mix(
-      in srgb,
-      var(
-          --state-active-color,
-          var(--state-icon-active-color, var(--primary-color))
-        )
-        16%,
-      var(--card-background-color, #fff)
+      --state-inactive-color,
+      var(--state-icon-color, var(--secondary-text-color, #9e9e9e))
     );
   }
 
-  .power-icon:focus-visible,
+  .power-icon.on .icon {
+    background: var(
+      --state-icon-active-color,
+      var(
+        --state-light-active-color,
+        var(--state-active-color, var(--paper-item-icon-active-color, #fdd835))
+      )
+    );
+    color: #212121;
+  }
+
+  .power-icon:focus-visible {
+    outline: none;
+  }
+
+  .power-icon:focus-visible .icon,
   .swatch:focus-visible,
   .slider-dot:focus-visible {
     outline: 2px solid var(--primary-color);
@@ -251,7 +283,18 @@ const lightsStyles = css`
     width: var(--slider-icon-size);
     height: var(--slider-icon-size);
     --mdc-icon-size: var(--slider-icon-size);
+    --iron-icon-width: var(--slider-icon-size);
+    --iron-icon-height: var(--slider-icon-size);
+    --icon-primary-color: currentColor;
+    --state-icon-color: currentColor;
     color: inherit;
+  }
+
+  .power-icon ha-icon svg {
+    display: block;
+    width: var(--slider-icon-size);
+    height: var(--slider-icon-size);
+    fill: currentColor;
   }
 
   .brightness {
@@ -362,8 +405,10 @@ const lightsStyles = css`
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
+    align-self: flex-start;
     gap: var(--stage-label-gap);
     width: var(--slider-dot-size);
+    height: auto;
     min-width: 0;
     max-width: 100%;
     cursor: pointer;
@@ -464,21 +509,18 @@ const lightsStyles = css`
   }
 
   .showcase {
-    --power-button-size: 48px;
+    --power-button-size: 40px;
+    --power-icon-size: 28px;
     --slider-dot-size: 26px;
     --slider-button-height: 48px;
-    --slider-icon-size: 20px;
+    --slider-icon-size: 18px;
     --slider-dot-icon-size: 14px;
     --preset-height: 18px;
     --rgb-value-width: 28px;
   }
 
-  .showcase .header {
-    padding-bottom: 0;
-  }
-
   .showcase .slider-section {
-    padding-top: 10px;
+    padding: 8px;
   }
 
   .showcase .power-icon,

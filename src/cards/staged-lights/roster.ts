@@ -16,10 +16,16 @@ export const rowRoster = (
     .map(normalizeSwitch)
     .filter((item) => isValidEntityId(item.entity));
 
-export const allRosterItems = (config?: StagedLightsCardConfig): SwitchEntityConfig[] => {
+const uniqueRosterItems = (
+  config: StagedLightsCardConfig | undefined,
+  includeRow: (row: LightRowId) => boolean,
+): SwitchEntityConfig[] => {
   const seen = new Set<string>();
   const items: SwitchEntityConfig[] = [];
   ROW_ORDER.forEach((row) => {
+    if (!includeRow(row)) {
+      return;
+    }
     rowRoster(config, row).forEach((item) => {
       if (seen.has(item.entity)) {
         return;
@@ -30,6 +36,21 @@ export const allRosterItems = (config?: StagedLightsCardConfig): SwitchEntityCon
   });
   return items;
 };
+
+export const rowIsConfigured = (
+  config: StagedLightsCardConfig | undefined,
+  row: LightRowId,
+): boolean => {
+  const count = rowRoster(config, row).length;
+  return row === "rgb" ? count > 0 : count >= MIN_WARM_WHITE_ENTITIES;
+};
+
+export const allRosterItems = (config?: StagedLightsCardConfig): SwitchEntityConfig[] =>
+  uniqueRosterItems(config, () => true);
+
+export const configuredRosterItems = (
+  config?: StagedLightsCardConfig,
+): SwitchEntityConfig[] => uniqueRosterItems(config, (row) => rowIsConfigured(config, row));
 
 export const visibleLights = (config?: StagedLightsCardConfig): SwitchTarget[] => {
   const items = configuredRosterItems(config);
@@ -46,34 +67,6 @@ export const visibleLights = (config?: StagedLightsCardConfig): SwitchTarget[] =
 
 export const allLightIds = (config?: StagedLightsCardConfig): string[] =>
   allRosterItems(config).map((item) => item.entity);
-
-export const rowIsConfigured = (
-  config: StagedLightsCardConfig | undefined,
-  row: LightRowId,
-): boolean => {
-  const count = rowRoster(config, row).length;
-  return row === "rgb" ? count > 0 : count >= MIN_WARM_WHITE_ENTITIES;
-};
-
-export const configuredRosterItems = (
-  config?: StagedLightsCardConfig,
-): SwitchEntityConfig[] => {
-  const seen = new Set<string>();
-  const items: SwitchEntityConfig[] = [];
-  ROW_ORDER.forEach((row) => {
-    if (!rowIsConfigured(config, row)) {
-      return;
-    }
-    rowRoster(config, row).forEach((item) => {
-      if (seen.has(item.entity)) {
-        return;
-      }
-      seen.add(item.entity);
-      items.push(item);
-    });
-  });
-  return items;
-};
 
 export const isEmptyLightsConfig = (config?: StagedLightsCardConfig): boolean =>
   !config || !ROW_ORDER.some((row) => rowIsConfigured(config, row));

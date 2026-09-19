@@ -334,7 +334,7 @@ A lights card with three exclusive rows:
 2. **Warm** — Power button labeled Warm, plus intensity stages. Needs at least two lights or switches or the whole row stays hidden. Two entities allow 2–3 stages. Three or more entities allow 2–5 stages. Names are **Min / Low / Mid / High / Max** (Min and Max always stay; the middle names appear as you add stages). Each stage is an on/off mix, same as Staged Switch.
 3. **White / sun** — the same stage limits, names, and per-light on/off setup. Also hidden with fewer than two entities.
 
-Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row.
+Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row. The card has no heading of its own — put a Heading card above it if you want a room name.
 
 The editor is two groups of pages, like Staged Switch: first pick RGB, Warm, and White entities, then set each group up. RGB setup chooses the default color swatches and on/off button icons. Warm and White setup choose on/off icons, a stage icon, and which lights are on at each intensity.
 
@@ -349,7 +349,6 @@ input_text:
 
 ```yaml
 type: custom:staged-lights-card
-title: Living room
 entity: input_text.living_lights
 rgb:
   - light.sofa_rgb
@@ -387,7 +386,6 @@ Power off keeps the last row, RGB brightness and color, and Warm/White intensity
 | Option | Type | Required | Description |
 | --- | --- | --- | --- |
 | `type` | string | yes | `custom:staged-lights-card` |
-| `title` | string | no | Card heading |
 | `entity` | string | recommended | `input_text` that stores the JSON state |
 | `stages` | number | no | Fallback stage count when a row has no map yet. Still clamped per row: 2 lights → max 3, 3+ lights → max 5 |
 | `rgb` | list | no | RGB-capable lights for the color row |
@@ -430,7 +428,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.4-beta`.
+2. Commit and tag, for example `v0.0.5-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

@@ -21,15 +21,13 @@ import {
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
 import { hexToRgb, normalizeHex } from "./color";
-import { lightsDirectControl, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
+import { lightsDirectControl, lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   CARD_NAME,
   CARD_TITLE,
   DEFAULT_RGB_HEX,
-  DEFAULT_TITLE,
   ROW_META,
   ROW_ORDER,
-  SHOWCASE_TITLE,
 } from "./const";
 import "./editor";
 import { lightsStorageKey, resolveLightsState, writeStoredLightsState } from "./persist";
@@ -43,7 +41,6 @@ import {
   configuredRows,
   displayRgbPercent,
   intensityNames,
-  lightsHeaderValue,
   lightsLayoutRows,
   lightsStageCount,
   parseRgbPercent,
@@ -52,7 +49,7 @@ import {
   splitStageTargets,
   stageToBrightness,
 } from "./stages";
-import { activeLightRow, exclusiveLightsState, serializeLightsState } from "./state";
+import { exclusiveLightsState, serializeLightsState } from "./state";
 import { cardStyles } from "./styles";
 import type {
   LightRowId,
@@ -77,7 +74,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   public static getStubConfig(): StagedLightsCardConfig {
     return {
       type: `custom:${CARD_NAME}`,
-      title: DEFAULT_TITLE,
       rgb: [],
       warm: [],
       white: [],
@@ -135,11 +131,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
   private get _rows(): LightRowId[] {
     return configuredRows(this._config);
-  }
-
-  private get _activeRow(): LightRowId | undefined {
-    const active = activeLightRow(this._current);
-    return active && this._rows.includes(active) ? active : undefined;
   }
 
   private get _visibleEntities() {
@@ -284,7 +275,11 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
   private _commit(next: LightsCardState): void {
     void this._run(async () => {
-      await this._writeState(next);
+      try {
+        await this._writeState(next);
+      } catch (error) {
+        this._error = errorMessage(error, "Failed to update helper");
+      }
       await this._applyMode(next);
     });
   }
@@ -441,7 +436,9 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
         aria-pressed=${on}
         @click=${() => this._toggleRow(row)}
       >
-        <ha-icon .icon=${on ? icons.on : icons.off}></ha-icon>
+        <span class="icon">
+          <ha-icon .icon=${on ? icons.on : icons.off}></ha-icon>
+        </span>
         <span class="tick ${on ? "active" : ""}">${meta.label}</span>
       </button>
     `;
@@ -457,7 +454,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     );
     return html`
       <div
-        class="mode-controls rgb-controls ${rgb?.on ? "" : "power-off"}"
+        class="mode-controls rgb-controls ${lightsRowMuted(rgb?.on) ? "power-off" : ""}"
         style="--current-color: ${color}; grid-row: ${rowIndex}"
         aria-label="RGB brightness and color"
       >
@@ -512,17 +509,19 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     );
     return html`
       <div
-        class="mode-controls stage-controls ${rowState?.on ? "" : "power-off"}"
+        class="mode-controls stage-controls ${lightsRowMuted(rowState?.on) ? "power-off" : ""}"
         style="--slider-progress: ${fill}%; --stage-count: ${count}; grid-row: ${rowIndex}"
         aria-label="${meta.label} intensity"
       >
-        <div class="slider-visual" aria-hidden="true">
-          <div class="slider-line"></div>
-          <div class="slider-fill"></div>
+        <div class="stage-track">
+          <div class="slider-visual" aria-hidden="true">
+            <div class="slider-line"></div>
+            <div class="slider-fill"></div>
+          </div>
+          ${names.map((label, index) =>
+            this._renderStageDot(row, index + 1, current, Boolean(rowState?.on), label),
+          )}
         </div>
-        ${names.map((label, index) =>
-          this._renderStageDot(row, index + 1, current, Boolean(rowState?.on), label),
-        )}
       </div>
     `;
   }
@@ -551,26 +550,11 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   private _renderShowcase() {
     return html`
       <ha-card class="showcase">
-        <div class="header">
-          <div class="titles">
-            <h2 class="title">${SHOWCASE_TITLE}</h2>
-            <div class="stage-name">${ROW_META.rgb.label}</div>
-          </div>
-        </div>
         <div class="slider-section">
           ${this._renderModeGroup(true)}
         </div>
       </ha-card>
     `;
-  }
-
-  private _headerValue(active: LightRowId | undefined): string | undefined {
-    const staged = active === "warm" || active === "white";
-    return lightsHeaderValue(
-      active,
-      staged ? this._current[active]?.stage : undefined,
-      staged ? this._stageCount(active) : undefined,
-    );
   }
 
   protected render() {
@@ -587,18 +571,8 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return html`<ha-card><div class="warning">Invalid helper: ${this._config.entity}</div></ha-card>`;
     }
 
-    const active = this._activeRow;
-    const headerValue = this._headerValue(active);
-
     return html`
       <ha-card>
-        <div class="header">
-          <div class="titles">
-            <h2 class="title">${this._config.title ?? DEFAULT_TITLE}</h2>
-            <div class="stage-name">${active ? ROW_META[active].label : "Off"}</div>
-          </div>
-          ${headerValue ? html`<div class="stage-value">${headerValue}</div>` : nothing}
-        </div>
         ${this._error ? html`<div class="warning">${this._error}</div>` : nothing}
         ${this._config.entity && !this._helper
           ? html`<div class="notice">

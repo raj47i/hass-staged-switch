@@ -218,12 +218,24 @@ export const sharedEditorStyles = css`
   }
 
   ha-textfield,
+  ha-text-field,
   ha-entity-picker,
   ha-area-picker,
   ha-device-picker,
   ha-icon-picker,
-  ha-select {
+  ha-select,
+  .text-input {
     width: 100%;
+  }
+
+  .text-input {
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+    color: var(--primary-text-color);
+    font: inherit;
   }
 
   .list {

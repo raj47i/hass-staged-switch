@@ -604,22 +604,14 @@ export class StagedLightsCardEditor extends LitElement {
     `;
   }
 
+  private _checkboxChecked(ev: Event): boolean {
+    const target = (ev.currentTarget ?? ev.target) as { checked?: boolean } | null;
+    return Boolean(target?.checked);
+  }
+
   private _renderSharedFields() {
     const config = this._config!;
     return html`
-      <ha-textfield
-        label="Title"
-        .value=${config.title ?? ""}
-        placeholder="Room lights"
-        @input=${(ev: Event) => {
-          const target = ev.target;
-          if (!(target instanceof HTMLInputElement)) {
-            return;
-          }
-          this._update({ title: target.value || undefined });
-        }}
-      ></ha-textfield>
-
       <ha-entity-picker
         .hass=${this.hass}
         .value=${config.entity ?? ""}
@@ -638,13 +630,8 @@ export class StagedLightsCardEditor extends LitElement {
         <span class="label">Directly control lights</span>
         <input
           type="checkbox"
-            .checked=${lightsDirectControl(config)}
-            @change=${(ev: Event) => {
-              const target = ev.target;
-              if (target instanceof HTMLInputElement) {
-                this._update({ direct_control: target.checked });
-              }
-            }}
+          .checked=${lightsDirectControl(config)}
+          @change=${(ev: Event) => this._update({ direct_control: this._checkboxChecked(ev) })}
         />
       </div>
       <div class="inline">

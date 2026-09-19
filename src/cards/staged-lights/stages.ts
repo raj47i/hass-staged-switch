@@ -17,6 +17,7 @@ import {
   MAX_TWO_ENTITY_STAGES,
   MIN_LIGHT_STAGES,
   MIN_WARM_WHITE_ENTITIES,
+  ROW_ORDER,
 } from "./const";
 import type {
   LightRowId,
@@ -95,27 +96,13 @@ export const parseRgbPercent = (value: unknown): number | undefined => {
 export const displayRgbPercent = (brightness: number, dragPercent?: number): number =>
   parseRgbPercent(dragPercent) ?? brightnessToPercent(brightness);
 
-export const lightsHeaderValue = (
-  active: LightRowId | undefined,
-  stage?: number,
-  count?: number,
-): string | undefined => {
-  if (active === "rgb") {
-    return undefined;
-  }
-  if (active === "warm" || active === "white") {
-    return intensityName(stage ?? 1, count ?? DEFAULT_LIGHT_STAGES);
-  }
-  return undefined;
-};
-
 export const lightsLayoutRows = (config?: StagedLightsCardConfig): number => {
   if (isEmptyLightsConfig(config)) {
     return 4;
   }
   const rgbExtra = rowRoster(config, "rgb").length ? 1 : 0;
   const chipRows = config?.show_switches ? chunkEvenly(visibleLights(config)).length : 0;
-  return 2 + configuredRows(config).length + rgbExtra + chipRows;
+  return 1 + configuredRows(config).length + rgbExtra + chipRows;
 };
 
 export const stageToBrightness = (stage: number, count: number): number => {
@@ -130,7 +117,7 @@ export const percentToBrightness = (percent: number): number =>
   clamp(Math.round((clamp(finiteOr(percent, 1), 1, 100) / 100) * 255), 1, 255);
 
 export const configuredRows = (config?: StagedLightsCardConfig): LightRowId[] =>
-  (["rgb", "warm", "white"] as const).filter((row) => rowIsConfigured(config, row));
+  ROW_ORDER.filter((row) => rowIsConfigured(config, row));
 
 export const splitRowIds = (
   entityIds: string[],

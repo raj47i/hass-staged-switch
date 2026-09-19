@@ -2,7 +2,6 @@ import type { LightRowId } from "./types";
 
 export const CARD_NAME = "staged-lights-card";
 export const CARD_TITLE = "Staged Lights Card";
-export const DEFAULT_TITLE = "Room lights";
 export const EDITOR_SELECT_EVENT = "staged-lights-editor-select";
 export const RGB_DOMAINS = ["light"];
 export const STAGE_DOMAINS = ["light", "switch"];
@@ -41,8 +40,6 @@ export const ROW_META: Record<
   { label: string; icon: string }
 > = {
   rgb: { label: "RGB", icon: "mdi:palette" },
-  warm: { label: "Warm", icon: "mdi:weather-sunset" },
+  warm: { label: "Warm", icon: "mdi:lamp" },
   white: { label: "White", icon: "mdi:white-balance-sunny" },
 };
-
-export const SHOWCASE_TITLE = "Living room";

@@ -44,11 +44,13 @@ export const rowPowerIcons = (
 
 export const lightsDirectControl = (config?: StagedLightsCardConfig): boolean => {
   const value = config?.direct_control as unknown;
-  if (value === true || value === 1 || value === "1" || value === "on" || value === "true") {
+  if (value === true || value === 1 || value === "1" || value === "on" || value === "true" || value === "yes") {
     return true;
   }
   return false;
 };
+
+export const lightsRowMuted = (on: unknown): boolean => !Boolean(on);
 
 export const rowStageIcon = (
   config: StagedLightsCardConfig | undefined,

@@ -18,6 +18,7 @@ export interface RowIcons {
 
 export interface StagedLightsCardConfig extends LovelaceCardConfig {
   type: string;
+  /** Ignored leftover. Existing YAML may still have it. */
   title?: string;
   entity?: string;
   stages?: number;
