@@ -17,6 +17,7 @@ export const appendUniqueEntities = (
   roster: SwitchEntityConfig[],
   entityIds: string[],
   hass?: HomeAssistant,
+  domains?: string[],
 ): { roster: SwitchEntityConfig[]; added: boolean } => {
   const next = roster.filter((item) => isValidEntityId(item.entity));
   const have = new Set(next.map((item) => item.entity));
@@ -26,6 +27,7 @@ export const appendUniqueEntities = (
       hass &&
       isValidEntityId(entityId) &&
       isToggleEntity(hass, entityId) &&
+      (!domains?.length || domains.includes(entityId.split(".", 1)[0] ?? "")) &&
       !have.has(entityId)
     ) {
       next.push(normalizeSwitch(entityId));

@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyToggleTargets, setEntityOnOff, setInputNumber } from "./actions";
+import {
+  applyLightLooks,
+  applyToggleTargets,
+  setEntityOnOff,
+  setInputNumber,
+  setInputText,
+} from "./actions";
 import {
   appendUniqueEntities,
   fireConfigChanged,
   pickedValue,
 } from "./editor";
-import { isRosterEntity, isToggleEntity } from "./entities";
+import { isRosterEntity, isRgbCapableLight, isToggleEntity } from "./entities";
 import {
   errorMessage,
   fireEvent,
@@ -119,6 +125,12 @@ describe("applyToggleTargets", () => {
     ]);
     await setEntityOnOff(hass, "fan.patio", true);
     await setInputNumber(hass, "input_number.scene", 2);
+    await setInputText(hass, "input_text.room", "{\"r\":1}");
+    await applyLightLooks(hass, ["light.sofa"], {
+      on: true,
+      brightness: 180,
+      rgb: [255, 152, 0],
+    });
     expect(calls).toEqual([
       { domain: "homeassistant", service: "turn_on", data: { entity_id: ["switch.a"] } },
       { domain: "homeassistant", service: "turn_off", data: { entity_id: ["light.b"] } },
@@ -127,6 +139,20 @@ describe("applyToggleTargets", () => {
         domain: "input_number",
         service: "set_value",
         data: { entity_id: "input_number.scene", value: 2 },
+      },
+      {
+        domain: "input_text",
+        service: "set_value",
+        data: { entity_id: "input_text.room", value: "{\"r\":1}" },
+      },
+      {
+        domain: "light",
+        service: "turn_on",
+        data: {
+          entity_id: ["light.sofa"],
+          brightness: 180,
+          rgb_color: [255, 152, 0],
+        },
       },
     ]);
   });
@@ -282,6 +308,31 @@ describe("isToggleEntity extras", () => {
     expect(isToggleEntity(hass, "light.hidden")).toBe(false);
     expect(isToggleEntity(hass, "light.disabled")).toBe(false);
     expect(isToggleEntity(hass, "light.broken")).toBe(false);
+  });
+
+  it("accepts RGB-capable lights and rejects color-temp only", () => {
+    const hass = hassStub({
+      states: {
+        "light.rgb": {
+          entity_id: "light.rgb",
+          state: "on",
+          attributes: { supported_color_modes: ["rgb"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.warm": {
+          entity_id: "light.warm",
+          state: "on",
+          attributes: { supported_color_modes: ["color_temp"] },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+    });
+    expect(isRgbCapableLight(hass, "light.rgb")).toBe(true);
+    expect(isRgbCapableLight(hass, "light.unloaded")).toBe(true);
+    expect(isRgbCapableLight(hass, "light.warm")).toBe(false);
+    expect(isRgbCapableLight(hass, "switch.lamp")).toBe(false);
   });
 });
 

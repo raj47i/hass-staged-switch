@@ -19,6 +19,33 @@ const TOGGLE_STATES = new Set(["on", "off", "unavailable", "unknown"]);
 const isControlEntity = (entityId: string): boolean =>
   CONTROL_DOMAINS.includes(domainOf(entityId));
 
+export const isLightEntity = (entityId: string): boolean =>
+  domainOf(entityId) === "light";
+
+const RGB_COLOR_MODES = new Set(["rgb", "rgbw", "rgbww", "hs", "xy"]);
+
+export const isRgbCapableLight = (
+  hass: HomeAssistant | undefined,
+  entityId: string,
+): boolean => {
+  if (!isValidEntityId(entityId) || !isLightEntity(entityId)) {
+    return false;
+  }
+  const stateObj = hass?.states[entityId];
+  if (!stateObj) {
+    return true;
+  }
+  const modes = stateObj.attributes.supported_color_modes;
+  if (Array.isArray(modes) && modes.some((mode) => RGB_COLOR_MODES.has(String(mode)))) {
+    return true;
+  }
+  return Boolean(
+    stateObj.attributes.rgb_color ||
+      stateObj.attributes.hs_color ||
+      stateObj.attributes.xy_color,
+  );
+};
+
 export const isToggleEntity = (
   hass: HomeAssistant,
   entityId: string,

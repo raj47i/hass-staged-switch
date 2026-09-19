@@ -4,3 +4,4 @@
  * and reuse helpers from `src/shared/`.
  */
 import "./cards/staged-switch";
+import "./cards/staged-lights";

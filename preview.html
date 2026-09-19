@@ -87,6 +87,12 @@
           "M12 11a1 1 0 1 0 1 1 1 1 0 0 0-1-1m.5-9C16.14 2 19 4.69 19 8c0 1.55-.58 3-1.56 4.1l1.66 3.61A8.28 8.28 0 0 1 12.5 22C7.81 22 4 18.42 4 14c0-2.39 1.14-4.52 2.91-5.91L8.5 4.5A7.47 7.47 0 0 1 12.5 2z",
         "mdi:circle-medium":
           "M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4z",
+        "mdi:palette":
+          "M17.5 12a1.5 1.5 0 1 1-1.5 1.5 1.5 1.5 0 0 1 1.5-1.5m-3-4A1.5 1.5 0 1 1 16 9.5 1.5 1.5 0 0 1 14.5 8m-5 0A1.5 1.5 0 1 1 11 9.5 1.5 1.5 0 0 1 9.5 8m-3 4A1.5 1.5 0 1 1 8 13.5 1.5 1.5 0 0 1 6.5 12M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1-.23-.27-.38-.62-.38-1 0-.83.67-1.5 1.5-1.5H16a5 5 0 0 0 0-10 9 9 0 0 0-4-1z",
+        "mdi:weather-sunset":
+          "M3 12h5l1.5-2 2 4L14 9l1.5 3H21M12 3l1.1 2.4 2.6.4-1.9 1.8.5 2.6L12 8.8 9.7 10.2l.5-2.6-1.9-1.8 2.6-.4z",
+        "mdi:white-balance-sunny":
+          "M3.55 18.54 5 17.07 2.4 14.46 1 15.93M1 8.07l1.41 1.47 2.59-2.61L3.55 5.46M20.45 18.54 19 17.07l-2.59 2.61L18 21M23 8.07 21.59 9.54l-2.59-2.61 1.41-1.47M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6m0 16a1 1 0 0 1-1-1v-3h2v3a1 1 0 0 1-1 1M12 2a1 1 0 0 1 1 1v3h-2V3a1 1 0 0 1 1-1z",
       };
       class HaIcon extends HTMLElement {
         set icon(value) {
@@ -141,6 +147,7 @@
         <div class="cards">
           <staged-switch-card id="many"></staged-switch-card>
           <staged-switch-card id="card"></staged-switch-card>
+          <staged-lights-card id="lights"></staged-lights-card>
         </div>
       </section>
     </main>
@@ -230,16 +237,75 @@
           last_changed: "",
           last_updated: "",
         },
+        "input_text.living_lights": {
+          entity_id: "input_text.living_lights",
+          state: '{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1}}',
+          attributes: { max: 255 },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.sofa_rgb": {
+          entity_id: "light.sofa_rgb",
+          state: "on",
+          attributes: {
+            friendly_name: "Sofa RGB",
+            brightness: 180,
+            supported_color_modes: ["rgb"],
+          },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.cabinet_rgb": {
+          entity_id: "light.cabinet_rgb",
+          state: "on",
+          attributes: {
+            friendly_name: "Cabinet RGB",
+            brightness: 180,
+            supported_color_modes: ["rgb"],
+          },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.floor_lamp": {
+          entity_id: "light.floor_lamp",
+          state: "off",
+          attributes: { friendly_name: "Floor lamp" },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.reading": {
+          entity_id: "light.reading",
+          state: "off",
+          attributes: { friendly_name: "Reading" },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.ceiling": {
+          entity_id: "light.ceiling",
+          state: "off",
+          attributes: { friendly_name: "Ceiling" },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.desk": {
+          entity_id: "light.desk",
+          state: "off",
+          attributes: { friendly_name: "Desk" },
+          last_changed: "",
+          last_updated: "",
+        },
       };
 
       const refresh = () => {
         const next = { ...hass, states };
         card.hass = next;
         many.hass = next;
+        lights.hass = next;
       };
 
       const card = document.getElementById("card");
       const many = document.getElementById("many");
+      const lights = document.getElementById("lights");
       const hass = {
         language: "en",
         localize: (key) => key,
@@ -254,6 +320,8 @@
             states["input_number.patio_stage"].state = String(data.value);
           } else if (ids.includes("input_number.many_stage")) {
             states["input_number.many_stage"].state = String(data.value);
+          } else if (ids.includes("input_text.living_lights")) {
+            states["input_text.living_lights"].state = String(data.value ?? "");
           } else if (ids.includes("input_boolean.patio_power")) {
             states["input_boolean.patio_power"].state =
               service === "turn_on" ? "on" : "off";
@@ -292,6 +360,14 @@
           "switch.pump",
           "fan.patio",
         ],
+      });
+      lights.setConfig({
+        type: "custom:staged-lights-card",
+        title: "Living room",
+        entity: "input_text.living_lights",
+        rgb: ["light.sofa_rgb", "light.cabinet_rgb"],
+        warm: ["light.floor_lamp", "light.reading"],
+        white: ["light.ceiling", "light.desk"],
       });
       refresh();
     </script>

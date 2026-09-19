@@ -1,0 +1,59 @@
+import { PACKAGE_VERSION } from "../../shared/const";
+import type { LightRowId } from "./types";
+
+export const CARD_VERSION = PACKAGE_VERSION;
+export const CARD_NAME = "staged-lights-card";
+export const CARD_TITLE = "Staged Lights Card";
+export const DEFAULT_TITLE = "Room lights";
+export const EDITOR_SELECT_EVENT = "staged-lights-editor-select";
+export const RGB_DOMAINS = ["light"];
+export const STAGE_DOMAINS = ["light", "switch"];
+export const MIN_LIGHT_STAGES = 2;
+export const MAX_LIGHT_STAGES = 4;
+export const DEFAULT_LIGHT_STAGES = 3;
+export const DEFAULT_RGB_HEX = "#ff8a1d";
+export const DEFAULT_RGB_BRIGHTNESS = 180;
+
+export const INTENSITY_NAMES: Record<number, string[]> = {
+  2: ["Dim", "Bright"],
+  3: ["Dim", "Medium", "Bright"],
+  4: ["Dim", "Soft", "Medium", "Bright"],
+};
+
+export const RGB_PRESETS = [
+  "#ff8a1d",
+  "#ffc9a3",
+  "#f3eadc",
+  "#ffffff",
+  "#7ea6ff",
+  "#c4b4ff",
+  "#ffb0d4",
+  "#ff6d4d",
+] as const;
+
+export const ROW_ORDER: LightRowId[] = ["rgb", "warm", "white"];
+
+export const ROW_META: Record<
+  LightRowId,
+  { label: string; icon: string }
+> = {
+  rgb: { label: "RGB", icon: "mdi:palette" },
+  warm: { label: "Warm", icon: "mdi:weather-sunset" },
+  white: { label: "White", icon: "mdi:white-balance-sunny" },
+};
+
+export const SHOWCASE_TITLE = "Living room";
+export const SHOWCASE_STAGE_COUNT = 3;
+export const SHOWCASE_CURRENT_STAGE = 2;
+export const SHOWCASE_CHIPS: Array<{
+  entity: string;
+  icon: string;
+  state: "on" | "off";
+}> = [
+  { entity: "light.sofa_rgb", icon: "mdi:palette", state: "on" },
+  { entity: "light.cabinet_rgb", icon: "mdi:palette", state: "on" },
+  { entity: "light.floor_lamp", icon: "mdi:lightbulb", state: "off" },
+  { entity: "light.reading", icon: "mdi:lightbulb", state: "off" },
+  { entity: "light.ceiling", icon: "mdi:white-balance-sunny", state: "off" },
+  { entity: "light.desk", icon: "mdi:white-balance-sunny", state: "off" },
+];

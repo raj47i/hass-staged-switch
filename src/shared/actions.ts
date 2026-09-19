@@ -56,3 +56,38 @@ export const setInputNumber = async (
     value,
   });
 };
+
+export const setInputText = async (
+  hass: HomeAssistant,
+  entityId: string,
+  value: string,
+): Promise<void> => {
+  await hass.callService("input_text", "set_value", {
+    entity_id: entityId,
+    value,
+  });
+};
+
+export const applyLightLooks = async (
+  hass: HomeAssistant | undefined,
+  entityIds: string[],
+  look: {
+    on: boolean;
+    brightness: number;
+    rgb?: [number, number, number];
+  },
+  enabled = true,
+): Promise<void> => {
+  if (!hass || !enabled || !entityIds.length) {
+    return;
+  }
+  if (!look.on || look.brightness <= 0) {
+    await hass.callService("light", "turn_off", { entity_id: entityIds });
+    return;
+  }
+  await hass.callService("light", "turn_on", {
+    entity_id: entityIds,
+    brightness: look.brightness,
+    ...(look.rgb ? { rgb_color: look.rgb } : {}),
+  });
+};

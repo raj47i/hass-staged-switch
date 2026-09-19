@@ -13,7 +13,7 @@ Use it when one control should represent a sequence, for example:
 - Fan low / medium / high using three switches
 - Irrigation zones that come on one after another
 
-The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). This package can host more Lovelace cards in the same file; Staged Switch is the card that ships today.
+The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It currently ships two cards: **Staged Switch Card** and **Staged Lights Card**.
 
 ## How to use it
 
@@ -326,6 +326,58 @@ Or just `switch.patio_fan`.
 
 `direct_control: false` still updates the helpers, but the card will not turn entities on or off.
 
+## Staged Lights Card
+
+A lights card with three exclusive rows:
+
+1. **RGB** — Power button labeled RGB, a 1–100% brightness slider (no stage text), then a row of quick color presets. The last control is a custom color picker. Only RGB-capable lights can be added here.
+2. **Warm** — Power button labeled Warm, plus 2–4 intensity stages: Dim, Soft, Medium, Bright (fewer labels when you use fewer stages). Lights or switches.
+3. **White / sun** — the same intensity stages for cool or daylight lights or switches.
+
+Only one of RGB, Warm, or White can be on at a time. All entity chips sit together at the bottom, not per row.
+
+All of that state is stored in **one** `input_text` helper as a short JSON string. You do not create a helper per slider.
+
+```yaml
+input_text:
+  living_lights:
+    name: Living lights
+    max: 255
+```
+
+```yaml
+type: custom:staged-lights-card
+title: Living room
+entity: input_text.living_lights
+rgb:
+  - light.sofa_rgb
+  - light.cabinet_rgb
+warm:
+  - light.floor_lamp
+  - light.reading
+white:
+  - light.ceiling
+  - light.desk
+```
+
+The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1}}`. If the helper is missing, the card still remembers the last values in this browser.
+
+Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
+
+| Option | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | string | yes | `custom:staged-lights-card` |
+| `title` | string | no | Card heading |
+| `entity` | string | recommended | `input_text` that stores the JSON state |
+| `stages` | number | no | Warm/White intensity stages, `2`–`4`. Default is the largest of those rows, at least 2 |
+| `rgb` | list | no | RGB-capable lights for the color row |
+| `warm` | list | no | Lights or switches for the Warm row |
+| `white` | list | no | Lights or switches for the White row |
+| `direct_control` | boolean | no | Default `true`. `false` only writes the helper |
+| `show_switches` | boolean | no | Default `true`. Show every entity once at the bottom |
+
+RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
+
 ## Development
 
 ```bash
@@ -341,7 +393,8 @@ npm run deploy
 Layout:
 
 - `src/shared/` — helpers reused by every card in this package
-- `src/cards/staged-switch/` — this card
+- `src/cards/staged-switch/` — staged switch card
+- `src/cards/staged-lights/` — staged lights card
 - `src/index.ts` — bundle entry; import another card module here to add it
 
 Requirements: Node.js 20 or newer.
