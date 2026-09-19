@@ -5,7 +5,7 @@ import terser from "@rollup/plugin-terser";
 import typescript from "@rollup/plugin-typescript";
 
 export default {
-  input: "src/staged-switch-card.ts",
+  input: "src/index.ts",
   output: {
     file: "dist/staged-switch-card.js",
     format: "es",

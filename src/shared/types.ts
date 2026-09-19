@@ -18,8 +18,33 @@ export interface HassEntity {
   last_updated: string;
 }
 
+export interface EntityRegistryEntry {
+  entity_id: string;
+  device_id?: string | null;
+  area_id?: string | null;
+  hidden?: boolean;
+  disabled_by?: string | null;
+  entity_category?: "config" | "diagnostic" | null;
+}
+
+export interface DeviceRegistryEntry {
+  id: string;
+  area_id?: string | null;
+  name?: string | null;
+  name_by_user?: string | null;
+}
+
+export interface AreaRegistryEntry {
+  area_id: string;
+  name: string;
+}
+
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  entities?: Record<string, EntityRegistryEntry>;
+  devices?: Record<string, DeviceRegistryEntry>;
+  areas?: Record<string, AreaRegistryEntry>;
+  services?: Record<string, Record<string, unknown>>;
   callService(
     domain: string,
     service: string,
@@ -30,16 +55,16 @@ export interface HomeAssistant {
   language: string;
 }
 
+export interface LovelaceCardConfig {
+  type: string;
+  [key: string]: unknown;
+}
+
 export interface LovelaceCard extends HTMLElement {
   hass?: HomeAssistant;
   setConfig(config: LovelaceCardConfig): void;
   getCardSize?(): number | Promise<number>;
   getGridOptions?(): { columns?: number; min_rows?: number };
-}
-
-export interface LovelaceCardConfig {
-  type: string;
-  [key: string]: unknown;
 }
 
 export interface LovelaceCardEditor extends HTMLElement {
@@ -54,47 +79,27 @@ export interface SwitchTarget {
   state: SwitchState;
 }
 
-export interface StageConfig {
-  name?: string;
-  icon?: string;
-  switches?: Record<string, SwitchState> | Array<string | SwitchTarget>;
-}
-
 export interface SwitchEntityConfig {
   entity: string;
   name?: string;
   icon?: string;
+  hide?: boolean;
 }
 
-export interface StagedSwitchCardConfig extends LovelaceCardConfig {
-  type: string;
-  title?: string;
-  entity?: string;
-  power_entity?: string;
-  stages?: StageConfig[];
+export interface HideableRoster {
   switches?: Array<string | SwitchEntityConfig>;
-  stage_names?: string[];
-  direct_control?: boolean;
-  show_switches?: boolean;
-  show_stage_labels?: boolean;
 }
 
-export interface ResolvedStage {
-  index: number;
+export interface LovelaceCardInfo {
+  type: string;
   name: string;
-  icon?: string;
-  targets: SwitchTarget[];
+  description: string;
+  preview?: boolean;
+  documentationURL?: string;
 }
 
 declare global {
   interface Window {
-    customCards: Array<{
-      type: string;
-      name: string;
-      description: string;
-      preview?: boolean;
-      documentationURL?: string;
-    }>;
+    customCards: LovelaceCardInfo[];
   }
-
 }

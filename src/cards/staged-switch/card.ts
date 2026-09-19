@@ -1,35 +1,55 @@
 import { LitElement, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { CARD_NAME, CARD_TITLE, CARD_VERSION, DEFAULT_TITLE } from "./const";
-import "./editor";
-import { cardStyles } from "./styles";
-import type {
-  HomeAssistant,
-  LovelaceCard,
-  ResolvedStage,
-  StagedSwitchCardConfig,
-  SwitchTarget,
-} from "./types";
 import {
-  allOffTargets,
-  cardStorageKey,
+  applyToggleTargets,
+  chunkEvenly,
   clamp,
   domainOf,
+  entityDisplayName,
   entityIcon,
   entityStateLabel,
+  errorMessage,
+  fireEvent,
+  isInEditorPreview,
   isValidEntityId,
-  matchingStageIndex,
-  parseStageIndex,
-  partitionTargets,
+  relevantHassChanged,
+  rowFillPercent,
+  SerialActionQueue,
+  setEntityOnOff,
+  setInputNumber,
+  visibleCardEntities,
+} from "../../shared";
+import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
+import { DOCUMENTATION_URL } from "../../shared/const";
+import { registerLovelaceCard } from "../../shared/register";
+import {
+  CARD_NAME,
+  CARD_TITLE,
+  DEFAULT_POWER_LABEL,
+  DEFAULT_TITLE,
+  EDITOR_SELECT_EVENT,
+} from "./const";
+import "./editor";
+import {
+  cardStorageKey,
   readStoredPower,
   readStoredStage,
-  relevantEntityIds,
-  relevantHassChanged,
-  resolveStages,
-  uniqueEntities,
   writeStoredPower,
   writeStoredStage,
-} from "./utils";
+} from "./persist";
+import {
+  allOffTargets,
+  cardEntities,
+  extraStagesHidden,
+  matchingStageIndex,
+  parseStageIndex,
+  relevantEntityIds,
+  resolveStages,
+  stageDesiredStates,
+  uniqueEntities,
+} from "./stages";
+import { cardStyles } from "./styles";
+import type { ResolvedStage, StagedSwitchCardConfig } from "./types";
 
 @customElement(CARD_NAME)
 export class StagedSwitchCard extends LitElement implements LovelaceCard {
@@ -42,11 +62,11 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   @state() private _pending = false;
   @state() private _error?: string;
   private _cachedStages: ResolvedStage[] = [];
-  private _queue: Array<
+  private _queue = new SerialActionQueue<
     | { kind: "stage"; index: number }
     | { kind: "power"; on: boolean }
     | { kind: "entity"; entity: string; on: boolean }
-  > = [];
+  >();
 
   public static async getConfigElement() {
     return document.createElement(`${CARD_NAME}-editor`);
@@ -71,30 +91,38 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     this._localValue = undefined;
     this._localPower = undefined;
     this._localEntities = {};
-    this._queue = [];
+    this._queue.clear();
     this._cachedStages = [];
     this._error = undefined;
   }
 
   public getCardSize(): number {
-    const switches = this._config
-      ? uniqueEntities(resolveStages(this._config, this._sliderEntity))
-      : [];
-    const iconRow =
-      this._config?.show_switches === false || !switches.length ? 0 : 1;
-    return 2 + iconRow;
+    return 2 + this._entityButtonRows;
   }
 
   public getGridOptions() {
-    const switches = this._config
-      ? uniqueEntities(resolveStages(this._config, this._sliderEntity))
-      : [];
-    const iconRow =
-      this._config?.show_switches === false || !switches.length ? 0 : 1;
     return {
       columns: 12,
-      min_rows: 2 + iconRow,
+      min_rows: 2 + this._entityButtonRows,
     };
+  }
+
+  private get _visibleEntities() {
+    if (!this._config || this._config.show_switches === false) {
+      return [];
+    }
+    return visibleCardEntities(
+      this._config,
+      uniqueEntities(resolveStages(this._config, this._sliderEntity)),
+    );
+  }
+
+  private get _entityButtonRows(): number {
+    return chunkEvenly(this._visibleEntities).length;
+  }
+
+  private get _stageButtons() {
+    return this._stages.filter((stage) => stage.index > 0);
   }
 
   private get _sliderEntity() {
@@ -232,33 +260,53 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     }
   }
 
-  private _sliderProgress(): string {
-    if (this._maxIndex === 0) {
-      return "0%";
+  private _rowProgress(row: ResolvedStage[]): string {
+    return `${rowFillPercent(
+      row.map((stage) => stage.index),
+      this._currentIndex,
+    )}%`;
+  }
+
+  private _selectInEditor(
+    detail: { page: "entities" | "stages"; stageIndex?: number; entity?: string },
+  ): boolean {
+    if (!isInEditorPreview(this)) {
+      return false;
     }
-    return `${(this._currentIndex / this._maxIndex) * 100}%`;
+    fireEvent(this, EDITOR_SELECT_EVENT, detail);
+    return true;
   }
 
   private async _selectStage(index: number): Promise<void> {
+    if (index <= 0) {
+      if (this._selectInEditor({ page: "stages", stageIndex: 0 })) {
+        this._localPower = false;
+        return;
+      }
+      await this._applyPower(false);
+      return;
+    }
     this._localValue = index;
+    if (this._selectInEditor({ page: "stages", stageIndex: index })) {
+      this._localPower = true;
+      return;
+    }
     await this._applyStage(index);
   }
 
   private _togglePower(): void {
+    if (this._selectInEditor({ page: "stages", stageIndex: 0 })) {
+      this._localPower = !this._isOn;
+      return;
+    }
     void this._applyPower(!this._isOn);
   }
 
-  private _onBarClick(): void {
+  private _onPowerButtonClick(): void {
     this._togglePower();
   }
 
-  private _onPowerButtonClick(ev: Event): void {
-    ev.stopPropagation();
-    this._togglePower();
-  }
-
-  private _onStageButtonClick(ev: Event, index: number): void {
-    ev.stopPropagation();
+  private _onStageButtonClick(index: number): void {
     void this._selectStage(index);
   }
 
@@ -280,6 +328,9 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   private _onEntityButtonClick(entityId: string, actual: string): void {
+    if (this._selectInEditor({ page: "entities", entity: entityId })) {
+      return;
+    }
     if (actual !== "on" && actual !== "off") {
       return;
     }
@@ -319,7 +370,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       | { kind: "power"; on: boolean }
       | { kind: "entity"; entity: string; on: boolean },
   ): void {
-    this._queue.push(action);
+    this._queue.enqueue(action);
   }
 
   private async _writePower(on: boolean): Promise<void> {
@@ -328,9 +379,44 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     if (!this.hass || !this._config?.power_entity) {
       return;
     }
-    await this.hass.callService("homeassistant", on ? "turn_on" : "turn_off", {
-      entity_id: this._config.power_entity,
+    await setEntityOnOff(this.hass, this._config.power_entity, on);
+  }
+
+  private get _cardEntities(): SwitchTarget[] {
+    return cardEntities(this._config, this._stages);
+  }
+
+  private get _rememberedStageIndex(): number {
+    if (this._currentIndex > 0) {
+      return this._currentIndex;
+    }
+    const stored = readStoredStage(this._storageKey);
+    if (stored !== undefined && stored > 0) {
+      return clamp(stored, 1, this._maxIndex);
+    }
+    return Math.min(1, this._maxIndex);
+  }
+
+  private _targetsForStage(stage?: ResolvedStage): SwitchTarget[] {
+    const entities = this._cardEntities;
+    const desired = stageDesiredStates(
+      stage ?? { index: 0, name: "Off", targets: [] },
+      entities,
+    );
+    return entities.map((entity) => ({
+      ...entity,
+      state: desired[entity.entity] ?? "off",
+    }));
+  }
+
+  private _setLocalEntitiesFromTargets(targets: SwitchTarget[]): void {
+    const next: Record<string, "on" | "off"> = {};
+    targets.forEach((target) => {
+      if (isValidEntityId(target.entity)) {
+        next[target.entity] = target.state;
+      }
     });
+    this._localEntities = next;
   }
 
   private async _writeStage(stageIndex: number): Promise<void> {
@@ -339,27 +425,19 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     if (!this.hass || !this._config?.entity) {
       return;
     }
-    await this.hass.callService("input_number", "set_value", {
-      entity_id: this._config.entity,
-      value: this._sliderMin + stageIndex,
-    });
+    await setInputNumber(
+      this.hass,
+      this._config.entity,
+      this._sliderMin + stageIndex,
+    );
   }
 
   private async _applyTargets(targets: SwitchTarget[]): Promise<void> {
-    if (!this.hass || this._config?.direct_control === false) {
-      return;
-    }
-    const { on, off } = partitionTargets(targets);
-    if (on.length) {
-      await this.hass.callService("homeassistant", "turn_on", {
-        entity_id: on,
-      });
-    }
-    if (off.length) {
-      await this.hass.callService("homeassistant", "turn_off", {
-        entity_id: off,
-      });
-    }
+    await applyToggleTargets(
+      this.hass,
+      targets,
+      this._config?.direct_control !== false,
+    );
   }
 
   private async _flushQueue(): Promise<void> {
@@ -394,15 +472,12 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     this._error = undefined;
 
     try {
-      await this.hass.callService("homeassistant", on ? "turn_on" : "turn_off", {
-        entity_id: entity,
-      });
+      await setEntityOnOff(this.hass, entity, on);
       if (!this._queue.length) {
         await this._syncProgressFromEntities();
       }
     } catch (error) {
-      this._error =
-        error instanceof Error ? error.message : "Failed to toggle switch";
+      this._error = errorMessage(error, "Failed to toggle switch");
     } finally {
       this._pending = false;
     }
@@ -433,12 +508,13 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     this._error = undefined;
 
     try {
+      const targets = this._targetsForStage(this._stages[stageIndex]);
+      this._setLocalEntitiesFromTargets(targets);
       await this._writePower(true);
       await this._writeStage(stageIndex);
-      await this._applyTargets(this._stages[stageIndex]?.targets ?? []);
+      await this._applyTargets(targets);
     } catch (error) {
-      this._error =
-        error instanceof Error ? error.message : "Failed to apply stage";
+      this._error = errorMessage(error, "Failed to apply stage");
     } finally {
       this._pending = false;
     }
@@ -462,13 +538,18 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     this._error = undefined;
 
     try {
+      const stageIndex = this._rememberedStageIndex;
+      const targets = on
+        ? this._targetsForStage(this._stages[stageIndex])
+        : allOffTargets(this._stages, this._config);
+      this._setLocalEntitiesFromTargets(targets);
       await this._writePower(on);
-      await this._applyTargets(
-        on ? this._currentStage?.targets ?? [] : allOffTargets(this._stages),
-      );
+      if (on && stageIndex > 0 && this._currentIndex === 0) {
+        await this._writeStage(stageIndex);
+      }
+      await this._applyTargets(targets);
     } catch (error) {
-      this._error =
-        error instanceof Error ? error.message : "Failed to toggle power";
+      this._error = errorMessage(error, "Failed to toggle power");
     } finally {
       this._pending = false;
     }
@@ -477,8 +558,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   private _entityName(target: SwitchTarget): string {
-    const stateObj = this.hass?.states[target.entity];
-    return target.name || stateObj?.attributes.friendly_name || target.entity;
+    return entityDisplayName(this.hass, target.entity, target.name);
   }
 
   private _renderWarning() {
@@ -518,8 +598,13 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     ) {
       return html`
         <ha-card>
-          <div class="warning">
-            Configure an input_number entity or at least one switch to get started.
+          <div class="header">
+            <div class="titles">
+              <h2 class="title">${this._config.title ?? DEFAULT_TITLE}</h2>
+            </div>
+          </div>
+          <div class="empty">
+            Click this card and pick a stage helper or at least one switch.
           </div>
         </ha-card>
       `;
@@ -564,6 +649,31 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     `;
   }
 
+  private _renderStageDot(stage: ResolvedStage, showLabels: boolean) {
+    return html`
+      <div
+        class="slider-dot-slot"
+        @click=${() => this._onStageButtonClick(stage.index)}
+      >
+        <button
+          class="slider-dot ${stage.index < this._currentIndex
+            ? "done"
+            : stage.index === this._currentIndex
+              ? "current"
+              : "todo"} ${showLabels ? "has-label" : ""}"
+          type="button"
+          aria-label=${stage.name}
+          aria-pressed=${stage.index === this._currentIndex}
+        >
+          <ha-icon .icon=${stage.icon || "mdi:circle-medium"}></ha-icon>
+        </button>
+        ${showLabels
+          ? html`<span class="tick ${stage.index === this._currentIndex && this._isOn ? "active" : ""}">${stage.name}</span>`
+          : nothing}
+      </div>
+    `;
+  }
+
   protected render() {
     const warning = this._renderWarning();
     if (warning) {
@@ -573,7 +683,8 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     const config = this._config!;
     const stages = this._stages;
     const current = this._currentStage;
-    const entities = uniqueEntities(stages);
+    const visibleRows = chunkEvenly(visibleCardEntities(config, uniqueEntities(stages)));
+    const stageButtons = this._stageButtons;
     const showLabels = config.show_stage_labels !== false;
     const showSwitches = config.show_switches !== false;
     const wrongDomain =
@@ -607,71 +718,46 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
             </div>`
           : nothing}
 
+        ${extraStagesHidden(config)
+          ? html`<div class="notice">
+              This card shows at most 5 stages. Extra stages stay in the
+              config but are not used.
+            </div>`
+          : nothing}
+
         <div class="slider-section">
           <div
             class="slider-wrap ${this._maxIndex === 0 ? "single" : ""} ${this._isOn ? "" : "power-off"} ${showLabels ? "has-labels" : ""}"
-            style="--slider-progress: ${this._sliderProgress()}; --max-index: ${this._maxIndex}"
-            @click=${this._onBarClick}
+            style="--slider-progress: ${this._rowProgress(stageButtons)}; --stage-count: ${stageButtons.length}"
           >
             <div class="slider-main">
+              <div class="slider-visual" aria-hidden="true">
+                <div class="slider-line"></div>
+                <div class="slider-fill"></div>
+              </div>
               <button
                 class="power-icon ${this._isOn ? "on" : "off"}"
                 type="button"
                 aria-label="Power"
                 aria-pressed=${this._isOn}
-                @click=${this._onPowerButtonClick}
+                @click=${() => this._onPowerButtonClick()}
               >
                 <ha-icon .icon=${"mdi:power"}></ha-icon>
+                <span class="tick ${this._isOn ? "active" : ""}">${DEFAULT_POWER_LABEL}</span>
               </button>
-              <div class="slider-track">
-                <div class="slider-visual" aria-hidden="true">
-                  <div class="slider-line"></div>
-                  <div class="slider-fill"></div>
-                </div>
-                <div class="slider-dots">
-                  ${stages
-                    .filter((stage) => stage.index > 0)
-                    .map(
-                      (stage) => html`
-                        <button
-                          class="slider-dot ${stage.index < this._currentIndex
-                            ? "done"
-                            : stage.index === this._currentIndex
-                              ? "current"
-                              : "todo"} ${showLabels ? "has-label" : ""}"
-                          style="--dot-index: ${stage.index}"
-                          type="button"
-                          aria-label=${stage.name}
-                          aria-pressed=${stage.index === this._currentIndex}
-                          @click=${(ev: Event) => this._onStageButtonClick(ev, stage.index)}
-                        >
-                          <ha-icon .icon=${stage.icon || "mdi:circle-medium"}></ha-icon>
-                          ${showLabels
-                            ? html`<span class="tick ${stage.index === this._currentIndex && this._isOn ? "active" : ""}">${stage.name}</span>`
-                            : nothing}
-                        </button>
-                      `,
-                    )}
-                </div>
-              </div>
+              ${stageButtons.map((stage) => this._renderStageDot(stage, showLabels))}
             </div>
-            ${showLabels
-              ? html`
-                  <div class="ticks-row">
-                    <span
-                      class="tick power-tick ${this._isOn ? "" : "active"}"
-                    >
-                      ${stages[0]?.name ?? "Off"}
-                    </span>
-                    <div class="ticks"></div>
-                  </div>
-                `
-              : nothing}
           </div>
-          ${showSwitches && entities.length
+          ${showSwitches && visibleRows.length
             ? html`
                 <div class="switches">
-                  ${entities.map((entity) => this._renderSwitchChip(entity))}
+                  ${visibleRows.map(
+                    (row) => html`
+                      <div class="switch-row">
+                        ${row.map((entity) => this._renderSwitchChip(entity))}
+                      </div>
+                    `,
+                  )}
                 </div>
               `
             : nothing}
@@ -683,21 +769,14 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   static styles = cardStyles;
 }
 
-window.customCards = window.customCards || [];
-window.customCards.push({
+registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
     "A Lovelace card that combines several switches, lights, or fans into one staged control.",
   preview: true,
-  documentationURL: "https://github.com/raj47i/hass-staged-switch",
+  documentationURL: DOCUMENTATION_URL,
 });
-
-console.info(
-  `%c ${CARD_TITLE.toUpperCase()} %c ${CARD_VERSION} `,
-  "color: white; background: #03a9f4; font-weight: 700;",
-  "color: #03a9f4; background: white; font-weight: 700;",
-);
 
 declare global {
   interface HTMLElementTagNameMap {

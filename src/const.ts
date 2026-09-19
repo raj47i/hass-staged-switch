@@ -1,7 +1,18 @@
-export const CARD_VERSION = "0.0.1-beta";
-export const CARD_NAME = "staged-switch-card";
-export const CARD_TITLE = "Staged Switch Card";
-export const DEFAULT_TITLE = "Staged Switch Control";
-export const DEFAULT_OFF_LABEL = "Off";
-export const MAX_DERIVED_STAGES = 32;
-export const ENTITY_ID_PATTERN = /^[a-z0-9_]+\.[a-z0-9_]+$/i;
+export { PACKAGE_VERSION } from "./shared/const";
+export {
+  CARD_NAME,
+  CARD_TITLE,
+  CARD_VERSION,
+  DEFAULT_OFF_LABEL,
+  DEFAULT_POWER_LABEL,
+  DEFAULT_TITLE,
+  EDITOR_SELECT_EVENT,
+  MAX_RESOLVED_STAGES,
+  MAX_STAGES,
+} from "./cards/staged-switch/const";
+export {
+  CONTROL_DOMAINS,
+  DOCUMENTATION_URL,
+  ENTITY_ID_PATTERN,
+  MAX_ENTITY_BUTTONS_PER_ROW,
+} from "./shared/const";

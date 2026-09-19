@@ -1,6 +1,10 @@
 # Staged Switch Card
 
-A Home Assistant Lovelace card that combines several toggles into one staged control. Each position is a **stage**. Choosing a stage writes it to an `input_number` helper and turns the mapped entities on or off together. The control looks like a progress bar, but it is a set of buttons — it is not a draggable slider.
+![Staged Switch Card on a Home Assistant dashboard](images/staged-switch-card.png)
+
+A Home Assistant Lovelace card that combines several toggles into one staged control. Each position is a **stage**. Choosing a stage writes it to an `input_number` helper and turns the mapped entities on or off together.
+
+The control looks like a progress bar, but it is a set of buttons — it is not a draggable slider. The leftmost **Power** button turns the whole group off or back on. Power off always turns every entity on the card off. The helper remembers only the last stage, not individual chip states.
 
 Use it when one control should represent a sequence, for example:
 
@@ -9,7 +13,7 @@ Use it when one control should represent a sequence, for example:
 - Fan low / medium / high using three switches
 - Irrigation zones that come on one after another
 
-The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/).
+The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). This package can host more Lovelace cards in the same file; Staged Switch is the card that ships today.
 
 ## How to use it
 
@@ -35,6 +39,8 @@ HACS downloads `staged-switch-card.js` from the GitHub release.
    - URL: `/local/staged-switch-card.js`
    - Type: **JavaScript Module**
 
+While testing from this repo, use `npm run deploy` and point the resource at `/local/staged-switch-loader.js` instead. That loader reads a version stamp so you only need a browser refresh after each deploy, not a new resource URL.
+
 ```yaml
 resources:
   - url: /local/staged-switch-card.js
@@ -43,11 +49,11 @@ resources:
 
 ### 2. Create the stage helper
 
-The slider is backed by an `input_number`. Create it under **Settings → Devices & services → Helpers → Create helper → Number**, or in YAML.
+The current stage is stored in an `input_number`. Create it under **Settings → Devices & services → Helpers → Create helper → Number**, or in YAML.
 
-Set `min` to `0`, `step` to `1`, and `max` to the last stage index.
+Set `min` to `0`, `step` to `1`, and `max` to the last stage index. The card shows at most **5 stages besides Power**. Extra entities can still be on the card as chips.
 
-For three devices in cumulative mode there are **four** stages (Off plus one per device), so `max` is `3`:
+For three devices in cumulative mode there are **four** helper values (Off plus one per device), so `max` is `3`:
 
 ```yaml
 input_number:
@@ -66,7 +72,7 @@ input_number:
 | `2` | First two entities on |
 | `3` | All listed entities on |
 
-If `min` is not `0`, the card still maps slider positions onto that range when it writes `input_number.set_value`.
+If `min` is not `0`, the card still maps stage buttons onto that range when it writes `input_number.set_value`.
 
 ### 3. Add the card to a dashboard
 
@@ -82,7 +88,7 @@ You can also open **Show code editor** and paste any of the examples in this REA
 
 The card has two ways to group entities. Use **cumulative** when later stages should keep earlier ones on. Use **explicit stages** when each position needs its own on/off mix.
 
-Supported entity types: `switch`, `light`, `fan`, `input_boolean`, and anything else that accepts `homeassistant.turn_on` / `turn_off`.
+The editor accepts `switch`, `light`, `fan`, and `input_boolean` entities that have On/Off. Sensors, diagnostics, and hidden or disabled entities are skipped.
 
 ### Cumulative: stack entities in order
 
@@ -109,7 +115,7 @@ switches:
 
 What that combination does:
 
-| Slider | Label | Fan | String lights | Heater |
+| Stage | Label | Fan | String lights | Heater |
 | --- | --- | --- | --- | --- |
 | 0 | Off | off | off | off |
 | 1 | Fan | on | off | off |
@@ -129,7 +135,7 @@ switches:
   - switch.patio_heater
 ```
 
-Add as many entities as you need. Four devices → helper `max: 4` (Off + 4 stages). Five devices → `max: 5`.
+You can list more than five entities. The card still shows only five stage buttons; extra entities stay available as chips and are included when Power turns everything off.
 
 ### Explicit: any on/off mix per stage
 
@@ -166,7 +172,7 @@ stages:
       switch.soundbar: on
 ```
 
-| Slider | Label | Sofa | Reading | Cabinet | Soundbar |
+| Stage | Label | Sofa | Reading | Cabinet | Soundbar |
 | --- | --- | --- | --- | --- | --- |
 | 0 | All off | off | off | off | off |
 | 1 | Reading | off | on | off | off |
@@ -191,13 +197,13 @@ stages:
         state: "off"
 ```
 
-List every entity you care about on **every** stage. An entity omitted from a stage is left unchanged.
+List every entity you care about on **every** stage. When a stage is applied, roster entities that are omitted from that stage are turned off. Power off also turns every card entity off, including hidden chips.
 
-If both `stages` and `switches` are set, `stages` wins.
+If both `stages` and `switches` are set, `stages` wins for the stage map. `switches` is still used for chip order, names, and `hide`.
 
 ### Several independent combinations
 
-One card is one combination (one slider, one helper, one set of entities). For two groups, add two helpers and two cards:
+One card is one combination (one helper, one set of entities). For two groups, add two helpers and two cards:
 
 ```yaml
 # Card 1 — upstairs
@@ -219,7 +225,7 @@ switches:
   - switch.dining_fan
 ```
 
-Give each card its own `input_number` so the sliders do not fight.
+Give each card its own `input_number` so the stages do not fight.
 
 ### Mix entity domains in one card
 
@@ -242,7 +248,7 @@ switches:
 
 ### Let an automation own the switches
 
-If you already have automations that listen to the helper, keep the slider on the card but do not let the card touch the entities:
+If you already have automations that listen to the helper, keep the stage control on the card but do not let the card touch the entities:
 
 ```yaml
 type: custom:staged-switch-card
@@ -256,17 +262,18 @@ stages:
   - name: Drip
 ```
 
-The card only calls `input_number.set_value`. Your automation decides what turns on.
+The card only updates the helpers. Your automation decides what turns on.
 
 ## Visual editor
 
 1. Edit the dashboard and add **Staged Switch Card**, or click **Edit** on an existing card.
 2. Set the title, the `input_number` stage helper, and an optional `input_boolean` power helper.
-3. Choose **Cumulative switches** or **Explicit stage map**.
-4. Click **Add switch** (or **Add stage**) and pick entities. Repeat for every entity in the combination.
-5. Edit **Stage names** so each combination has its own label (Off / Fan / Heater, and so on).
-6. In explicit mode, set each row to **On** or **Off** for that stage.
-7. Use the checkboxes to show or hide entity buttons and stage labels, or to disable direct switch control.
+3. On **1. Entities**, add lights, fans, and switches. You can pick an area or a device to add every matching On/Off entity under it.
+4. Use **Hide from card** if a relay should follow the stages but not show as a chip.
+5. On **2. Stages**, choose **Cumulative switches** or **Explicit stage map**.
+6. Edit **Stage names** so each combination has its own label (Fan / Heater, and so on). The Power button label is always **Power**.
+7. In explicit mode, set each row to **On** or **Off** for that stage.
+8. Use the checkboxes to show or hide entity buttons and stage labels, or to disable direct switch control.
 
 YAML is still available from **Show code editor**.
 
@@ -278,21 +285,24 @@ YAML is still available from **Show code editor**.
 | `title` | string | no | `Staged Switch Control` | Card heading |
 | `entity` | string | recommended | | `input_number` that stores the current stage |
 | `power_entity` | string | no | | Optional `input_boolean` that stores group on/off. The stage helper keeps the last stage when the group is off |
-| `switches` | list | no | | Entities to combine in order. Stage `0` is all off; stage _n_ turns on the first _n_ items |
-| `stages` | list | no | | Explicit per-stage on/off map. Overrides `switches` when present |
+| `switches` | list | no | | Entities to combine in order. Stage `0` is all off; stage _n_ turns on the first _n_ items, up to 5 stages |
+| `stages` | list | no | | Explicit per-stage on/off map. Overrides `switches` for the stage map when present |
 | `stage_names` | list | no | | Labels for each stage combination (index `0` is Off) |
 | `direct_control` | boolean | no | `true` | `true`: card turns entities on/off. `false`: only updates the helpers |
-| `show_switches` | boolean | no | `true` | Show a button for each controlled entity |
-| `show_stage_labels` | boolean | no | `true` | Show the muted stage names under the control |
+| `show_switches` | boolean | no | `true` | Show a chip for each visible entity |
+| `show_stage_labels` | boolean | no | `true` | Show the muted stage names under the buttons |
 
 Provide at least one of `entity`, `switches`, or `stages`.
+
+Limits: **5 stages** besides Power, on one row. **6 entity chips** per row; extra chips wrap and are split evenly (7 → 4+3).
 
 ### `switches` item
 
 ```yaml
 - entity: switch.patio_fan   # required
-  name: Fan                  # optional entity button name
+  name: Fan                  # optional entity chip tooltip
   icon: mdi:fan              # optional
+  hide: true                 # optional; still controlled, not shown as a chip
 ```
 
 Or just `switch.patio_fan`.
@@ -308,11 +318,11 @@ Or just `switch.patio_fan`.
 
 ## How the control behaves
 
-1. The leftmost power button turns the group on or off. Turning it off leaves the last stage in the helper so turning it back on restores that combination.
-2. The square stage buttons are the only way to change the progress. Clicks on the bar around them only toggle power.
-3. Choosing a stage writes `input_number.set_value` (and the optional power helper), then turns that stage’s entities on or off when `direct_control` is enabled.
-4. The entity buttons under the bar toggle that one entity. If the new mix is not a configured stage, the progress bar stays put. If it matches a stage, the bar (and power) update to that stage.
-5. An entity omitted from an explicit stage is left unchanged when that stage is applied, and is ignored when matching the current mix.
+1. The leftmost **Power** button turns the group on or off. Turning it off turns every card entity off and leaves the last stage in the helper (and in this browser) so turning it back on restores that stage.
+2. Only the Power button and the stage buttons (or their labels) change the group. Clicks on the bar around them do nothing.
+3. Choosing a stage writes `input_number.set_value` (and the optional power helper), then applies that stage’s on/off mix when `direct_control` is enabled. Roster entities omitted from the stage are turned off.
+4. The entity chips under the bar toggle that one entity. If the new mix is not a configured stage, the progress stays put. If it matches a stage, the bar (and power) update to that stage.
+5. Individual chip toggles are not remembered across Power off. Memory is the last stage only.
 
 `direct_control: false` still updates the helpers, but the card will not turn entities on or off.
 
@@ -323,9 +333,16 @@ npm install
 npm test
 npm run build
 npm run watch
+npm run deploy
 ```
 
-`npm test` runs the stage-resolution unit tests. `npm run watch` rebuilds `dist/staged-switch-card.js` as you edit.
+`npm test` runs the unit tests. `npm run watch` rebuilds `dist/staged-switch-card.js` as you edit. Open `preview.html` for a dashboard-style preview (screenshot plus live cards). `npm run deploy` copies the bundle to Home Assistant at `ha:/config/www/`.
+
+Layout:
+
+- `src/shared/` — helpers reused by every card in this package
+- `src/cards/staged-switch/` — this card
+- `src/index.ts` — bundle entry; import another card module here to add it
 
 Requirements: Node.js 20 or newer.
 
@@ -333,8 +350,8 @@ Requirements: Node.js 20 or newer.
 
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
-1. Update `version` in `package.json` and `CARD_VERSION` in `src/const.ts`.
-2. Commit and tag, for example `v1.0.0`.
+1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
+2. Commit and tag, for example `v0.0.2-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

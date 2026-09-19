@@ -1,7 +1,7 @@
 {
   "name": "staged-switch-card",
-  "version": "0.0.1-beta",
-  "description": "Home Assistant Lovelace card to control multiple switches sequentially via a staged slider",
+  "version": "0.0.2-beta",
+  "description": "Home Assistant Lovelace cards for grouped switch, light, and fan control",
   "keywords": [
     "home-assistant",
     "homeassistant",
@@ -25,7 +25,8 @@
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deploy": "sh scripts/deploy.sh"
   },
   "dependencies": {
     "lit": "^3.2.1"

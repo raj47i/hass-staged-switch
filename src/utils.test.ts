@@ -1,16 +1,27 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   allOffTargets,
+  cardEntities,
+  extraStagesHidden,
+  stageDesiredStates,
   cardStorageKey,
   clamp,
   domainOf,
   entityIcon,
+  entitiesFromArea,
+  entitiesFromDevice,
   entityStateLabel,
   readStoredPower,
   readStoredStage,
   writeStoredPower,
   writeStoredStage,
+  chunkEvenly,
+  distributeEvenly,
+  rowFillPercent,
+  isToggleEntity,
   isValidEntityId,
+  normalizeSwitch,
+  visibleCardEntities,
   matchingStageIndex,
   normalizeState,
   parseStageIndex,
@@ -67,7 +78,7 @@ describe("resolveStages", () => {
   it("drops incomplete switch rows", () => {
     const stages = resolveStages({
       type: "custom:staged-switch-card",
-      switches: ["", { entity: "" }, "switch.pump"],
+      switches: ["", { entity: "" }, null as unknown as string, "switch.pump"],
     });
 
     expect(stages).toHaveLength(2);
@@ -141,8 +152,8 @@ describe("resolveStages", () => {
     expect(stages[2]?.targets.map((item) => item.state)).toEqual(["on", "on"]);
   });
 
-  it("caps huge helper ranges", () => {
-    const stages = resolveStages(
+  it("caps helper ranges and extra switches at 5 stages besides Off", () => {
+    const sliderOnly = resolveStages(
       { type: "custom:staged-switch-card", entity: "input_number.scene" },
       {
         entity_id: "input_number.scene",
@@ -152,8 +163,24 @@ describe("resolveStages", () => {
         attributes: { min: 0, max: 500 },
       },
     );
+    expect(sliderOnly).toHaveLength(6);
 
-    expect(stages).toHaveLength(33);
+    const many = resolveStages({
+      type: "custom:staged-switch-card",
+      switches: [
+        "switch.a",
+        "switch.b",
+        "switch.c",
+        "switch.d",
+        "switch.e",
+        "switch.f",
+        "switch.g",
+        "switch.h",
+      ],
+    });
+    expect(many).toHaveLength(6);
+    expect(uniqueEntities(many).map((item) => item.entity)).toHaveLength(8);
+    expect(many[5]?.targets.filter((item) => item.state === "on")).toHaveLength(5);
   });
 });
 
@@ -195,6 +222,17 @@ describe("relevantEntityIds", () => {
       "switch.pump",
       "switch.heater",
     ]);
+  });
+
+  it("includes roster entities that never appear in a stage", () => {
+    expect(
+      relevantEntityIds({
+        type: "custom:staged-switch-card",
+        entity: "input_number.pool_stage",
+        switches: ["switch.pump", "fan.patio"],
+        stages: [{ name: "Off", switches: { "switch.pump": "off" } }],
+      }),
+    ).toEqual(["input_number.pool_stage", "switch.pump", "fan.patio"]);
   });
 
   it("includes the optional power helper", () => {
@@ -325,6 +363,65 @@ describe("allOffTargets", () => {
     });
     expect(allOffTargets(stages).map((item) => item.state)).toEqual(["off", "off"]);
   });
+
+  it("includes roster entities omitted from explicit stages", () => {
+    const config = {
+      type: "custom:staged-switch-card",
+      switches: ["switch.pump", "light.sofa", "fan.patio"],
+      stages: [
+        { name: "Off", switches: { "switch.pump": "off" as const } },
+        { name: "Low", switches: { "switch.pump": "on" as const } },
+      ],
+    };
+    const stages = resolveStages(config);
+    expect(cardEntities(config, stages).map((item) => item.entity)).toEqual([
+      "switch.pump",
+      "light.sofa",
+      "fan.patio",
+    ]);
+    expect(allOffTargets(stages, config).map((item) => item.entity)).toEqual([
+      "switch.pump",
+      "light.sofa",
+      "fan.patio",
+    ]);
+    expect(allOffTargets(stages, config).every((item) => item.state === "off")).toBe(
+      true,
+    );
+  });
+});
+
+describe("stageDesiredStates and extraStagesHidden", () => {
+  it("defaults every card entity to off, then applies the stage", () => {
+    const config = {
+      type: "custom:staged-switch-card",
+      switches: ["switch.pump", "light.sofa"],
+      stages: [{ name: "Low", switches: { "switch.pump": "on" as const } }],
+    };
+    const stages = resolveStages(config);
+    expect(
+      stageDesiredStates(stages[0]!, cardEntities(config, stages)),
+    ).toEqual({
+      "switch.pump": "on",
+      "light.sofa": "off",
+    });
+  });
+
+  it("flags explicit configs that exceed the 5-stage cap", () => {
+    expect(
+      extraStagesHidden({
+        type: "custom:staged-switch-card",
+        stages: Array.from({ length: 7 }, (_, index) => ({
+          name: `Stage ${index}`,
+        })),
+      }),
+    ).toBe(true);
+    expect(
+      extraStagesHidden({
+        type: "custom:staged-switch-card",
+        stages: [{ name: "Off" }],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("entityStateLabel", () => {
@@ -361,5 +458,199 @@ describe("entityIcon", () => {
     ).toBe("mdi:ceiling-light");
     expect(entityIcon({ entity: "fan.exhaust" })).toBe("mdi:fan");
     expect(entityIcon({ entity: "scene.evening" })).toBe("mdi:power");
+  });
+});
+
+describe("entitiesFromArea and entitiesFromDevice", () => {
+  const hass = {
+    language: "en",
+    localize: (key: string) => key,
+    callService: async () => undefined,
+    states: {
+      "light.guest_rgb": {
+        entity_id: "light.guest_rgb",
+        state: "off",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+      "light.guest_white": {
+        entity_id: "light.guest_white",
+        state: "off",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+      "sensor.guest_temp": {
+        entity_id: "sensor.guest_temp",
+        state: "21",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+      "light.hall": {
+        entity_id: "light.hall",
+        state: "off",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+      "light.guest_diag": {
+        entity_id: "light.guest_diag",
+        state: "off",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+    },
+    entities: {
+      "light.guest_rgb": { entity_id: "light.guest_rgb", device_id: "dev-1" },
+      "light.guest_white": {
+        entity_id: "light.guest_white",
+        device_id: "dev-1",
+        area_id: "guest",
+      },
+      "light.guest_diag": {
+        entity_id: "light.guest_diag",
+        device_id: "dev-1",
+        area_id: "guest",
+        entity_category: "diagnostic",
+      },
+      "sensor.guest_temp": {
+        entity_id: "sensor.guest_temp",
+        device_id: "dev-1",
+        area_id: "guest",
+      },
+      "light.hall": { entity_id: "light.hall", area_id: "hall" },
+    },
+    devices: {
+      "dev-1": { id: "dev-1", area_id: "guest" },
+    },
+    areas: {
+      guest: { area_id: "guest", name: "Guest" },
+      hall: { area_id: "hall", name: "Hall" },
+    },
+  };
+
+  it("adds controllable entities from an area, including those that inherit the device area", () => {
+    expect(entitiesFromArea(hass, "guest")).toEqual([
+      "light.guest_rgb",
+      "light.guest_white",
+    ]);
+  });
+
+  it("adds controllable entities from a device", () => {
+    expect(entitiesFromDevice(hass, "dev-1")).toEqual([
+      "light.guest_rgb",
+      "light.guest_white",
+    ]);
+  });
+
+  it("skips sensors, diagnostics, and empty picker values", () => {
+    expect(isToggleEntity(hass, "sensor.guest_temp")).toBe(false);
+    expect(isToggleEntity(hass, "light.guest_diag")).toBe(false);
+    expect(isToggleEntity(hass, "light.guest_rgb")).toBe(true);
+    expect(entitiesFromArea(hass, "")).toEqual([]);
+    expect(entitiesFromDevice(hass, "")).toEqual([]);
+  });
+
+  it("allows a control entity that is not loaded in hass.states yet", () => {
+    expect(isToggleEntity(hass, "light.unloaded_lamp")).toBe(true);
+    expect(isToggleEntity(hass, "sensor.unloaded_temp")).toBe(false);
+  });
+});
+
+describe("normalizeSwitch", () => {
+  it("turns null or incomplete rows into empty entities", () => {
+    expect(normalizeSwitch(null).entity).toBe("");
+    expect(normalizeSwitch({ entity: undefined as unknown as string }).entity).toBe(
+      "",
+    );
+    expect(normalizeSwitch("light.guest_rgb").entity).toBe("light.guest_rgb");
+  });
+
+  it("keeps hide only when it is set", () => {
+    expect(normalizeSwitch({ entity: "switch.fan", hide: true }).hide).toBe(true);
+    expect(normalizeSwitch({ entity: "switch.fan" }).hide).toBeUndefined();
+  });
+});
+
+describe("distributeEvenly and visibleCardEntities", () => {
+  it("keeps six or fewer on one row", () => {
+    expect(distributeEvenly(0)).toEqual([]);
+    expect(distributeEvenly(1)).toEqual([1]);
+    expect(distributeEvenly(6)).toEqual([6]);
+  });
+
+  it("splits extra entities evenly across the fewest rows", () => {
+    expect(distributeEvenly(7)).toEqual([4, 3]);
+    expect(distributeEvenly(8)).toEqual([4, 4]);
+    expect(distributeEvenly(9)).toEqual([5, 4]);
+    expect(distributeEvenly(12)).toEqual([6, 6]);
+    expect(distributeEvenly(13)).toEqual([5, 4, 4]);
+  });
+
+  it("fills the rail to the current stage", () => {
+    expect(rowFillPercent([1, 2, 3], 1)).toBeCloseTo(100 / 3);
+    expect(rowFillPercent([1, 2, 3], 2)).toBeCloseTo(200 / 3);
+    expect(rowFillPercent([1, 2, 3], 3)).toBe(100);
+    expect(rowFillPercent([1, 2, 3, 4, 5], 5)).toBe(100);
+    expect(rowFillPercent([1, 2, 3, 4, 5], 0)).toBe(0);
+    expect(rowFillPercent([3, 4, 5], 1)).toBe(0);
+    expect(rowFillPercent([1, 2], 9)).toBe(100);
+    expect(rowFillPercent([], 1)).toBe(0);
+  });
+
+  it("hides flagged entities from the button rows", () => {
+    const entities = [
+      { entity: "switch.fan", state: "on" as const },
+      { entity: "light.string", state: "on" as const },
+      { entity: "switch.heater", state: "off" as const },
+    ];
+    expect(
+      visibleCardEntities(
+        {
+          type: "custom:staged-switch-card",
+          switches: [
+            "switch.fan",
+            { entity: "light.string", hide: true },
+            "switch.heater",
+          ],
+        },
+        entities,
+      ).map((item) => item.entity),
+    ).toEqual(["switch.fan", "switch.heater"]);
+    expect(
+      chunkEvenly(
+        visibleCardEntities(
+          {
+            type: "custom:staged-switch-card",
+            switches: [
+              "a.a",
+              "a.b",
+              "a.c",
+              "a.d",
+              { entity: "a.e", hide: true },
+              "a.f",
+              "a.g",
+              "a.h",
+            ],
+          },
+          [
+            { entity: "a.a", state: "off" },
+            { entity: "a.b", state: "off" },
+            { entity: "a.c", state: "off" },
+            { entity: "a.d", state: "off" },
+            { entity: "a.e", state: "off" },
+            { entity: "a.f", state: "off" },
+            { entity: "a.g", state: "off" },
+            { entity: "a.h", state: "off" },
+          ],
+        ),
+      ).map((row) => row.map((item) => item.entity)),
+    ).toEqual([
+      ["a.a", "a.b", "a.c", "a.d"],
+      ["a.e", "a.f", "a.g", "a.h"].filter((id) => id !== "a.e"),
+    ]);
   });
 });
