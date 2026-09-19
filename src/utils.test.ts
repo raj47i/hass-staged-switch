@@ -3,6 +3,7 @@ import {
   allOffTargets,
   cardEntities,
   extraStagesHidden,
+  isEmptyStagedSwitchConfig,
   stageDesiredStates,
   cardStorageKey,
   clamp,
@@ -404,6 +405,22 @@ describe("stageDesiredStates and extraStagesHidden", () => {
       "switch.pump": "on",
       "light.sofa": "off",
     });
+  });
+
+  it("treats a stub card with no helper or switches as empty", () => {
+    expect(
+      isEmptyStagedSwitchConfig({
+        type: "custom:staged-switch-card",
+        title: "Staged Switch Control",
+        switches: [],
+      }),
+    ).toBe(true);
+    expect(
+      isEmptyStagedSwitchConfig({
+        type: "custom:staged-switch-card",
+        switches: ["switch.fan"],
+      }),
+    ).toBe(false);
   });
 
   it("flags explicit configs that exceed the 5-stage cap", () => {

@@ -9,3 +9,21 @@ export const DEFAULT_POWER_LABEL = "Power";
 export const MAX_STAGES = 5;
 export const MAX_RESOLVED_STAGES = MAX_STAGES + 1;
 export const EDITOR_SELECT_EVENT = "staged-switch-editor-select";
+
+export const SHOWCASE_TITLE = "Patio";
+export const SHOWCASE_STAGE_NAME = "Heater";
+export const SHOWCASE_STAGE_COUNT = 4;
+export const SHOWCASE_CURRENT_INDEX = 3;
+
+export const SHOWCASE_CHIPS: Array<{
+  entity: string;
+  icon: string;
+  state: "on" | "off";
+}> = [
+  { entity: "switch.fan", icon: "mdi:toggle-switch", state: "on" },
+  { entity: "light.string", icon: "mdi:lightbulb", state: "on" },
+  { entity: "switch.heater", icon: "mdi:toggle-switch", state: "on" },
+  { entity: "light.lamp", icon: "mdi:lightbulb", state: "off" },
+  { entity: "light.porch", icon: "mdi:lightbulb", state: "off" },
+  { entity: "fan.patio", icon: "mdi:fan", state: "off" },
+];

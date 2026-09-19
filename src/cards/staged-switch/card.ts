@@ -28,6 +28,11 @@ import {
   DEFAULT_POWER_LABEL,
   DEFAULT_TITLE,
   EDITOR_SELECT_EVENT,
+  SHOWCASE_CHIPS,
+  SHOWCASE_CURRENT_INDEX,
+  SHOWCASE_STAGE_COUNT,
+  SHOWCASE_STAGE_NAME,
+  SHOWCASE_TITLE,
 } from "./const";
 import "./editor";
 import {
@@ -41,6 +46,7 @@ import {
   allOffTargets,
   cardEntities,
   extraStagesHidden,
+  isEmptyStagedSwitchConfig,
   matchingStageIndex,
   parseStageIndex,
   relevantEntityIds,
@@ -97,13 +103,18 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   public getCardSize(): number {
+    if (isEmptyStagedSwitchConfig(this._config)) {
+      return 4;
+    }
     return 2 + this._entityButtonRows;
   }
 
   public getGridOptions() {
     return {
       columns: 12,
-      min_rows: 2 + this._entityButtonRows,
+      min_rows: isEmptyStagedSwitchConfig(this._config)
+        ? 4
+        : 2 + this._entityButtonRows,
     };
   }
 
@@ -565,6 +576,9 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     if (!this._config) {
       return html`<ha-card><div class="warning">Invalid configuration</div></ha-card>`;
     }
+    if (isEmptyStagedSwitchConfig(this._config)) {
+      return this._renderShowcase();
+    }
     if (!this.hass) {
       return html`<ha-card><div class="warning">Waiting for Home Assistant</div></ha-card>`;
     }
@@ -587,24 +601,6 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
         <ha-card>
           <div class="warning">
             Invalid power entity: ${this._config.power_entity}
-          </div>
-        </ha-card>
-      `;
-    }
-    if (
-      !this._config.entity &&
-      !this._config.stages?.length &&
-      !uniqueEntities(this._stages).length
-    ) {
-      return html`
-        <ha-card>
-          <div class="header">
-            <div class="titles">
-              <h2 class="title">${this._config.title ?? DEFAULT_TITLE}</h2>
-            </div>
-          </div>
-          <div class="empty">
-            Click this card and pick a stage helper or at least one switch.
           </div>
         </ha-card>
       `;
@@ -646,6 +642,80 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
             `
           : html`<ha-icon .icon=${entityIcon(target)}></ha-icon>`}
       </button>
+    `;
+  }
+
+  private _renderShowcase() {
+    const current = SHOWCASE_CURRENT_INDEX;
+    const chips = chunkEvenly(SHOWCASE_CHIPS, 3);
+    const fill = rowFillPercent(
+      Array.from({ length: SHOWCASE_STAGE_COUNT }, (_, index) => index + 1),
+      current,
+    );
+    return html`
+      <ha-card class="showcase">
+        <div class="header">
+          <div class="titles">
+            <h2 class="title">${SHOWCASE_TITLE}</h2>
+            <div class="stage-name">${SHOWCASE_STAGE_NAME}</div>
+          </div>
+          <div class="stage-value">${current} / ${SHOWCASE_STAGE_COUNT}</div>
+        </div>
+        <div class="slider-section">
+          <div class="showcase-bar">
+            <button class="power-icon on" type="button" tabindex="-1" aria-hidden="true">
+              <ha-icon .icon=${"mdi:power"}></ha-icon>
+              <span class="tick active">${DEFAULT_POWER_LABEL}</span>
+            </button>
+            <div
+              class="showcase-track"
+              style="--slider-progress: ${fill}%"
+              aria-hidden="true"
+            >
+              <div class="slider-line"></div>
+              <div class="slider-fill"></div>
+              <div class="showcase-dots">
+                ${Array.from({ length: SHOWCASE_STAGE_COUNT }, (_, index) => {
+                  const stageIndex = index + 1;
+                  return html`
+                    <button
+                      class="slider-dot ${stageIndex < current
+                        ? "done"
+                        : stageIndex === current
+                          ? "current"
+                          : "todo"}"
+                      type="button"
+                      tabindex="-1"
+                    >
+                      <ha-icon .icon=${"mdi:circle-medium"}></ha-icon>
+                    </button>
+                  `;
+                })}
+              </div>
+            </div>
+          </div>
+          <div class="switches">
+            ${chips.map(
+              (row) => html`
+                <div class="switch-row">
+                  ${row.map(
+                    (item) => html`
+                      <button
+                        class="switch-status ${item.state}"
+                        type="button"
+                        tabindex="-1"
+                        aria-hidden="true"
+                      >
+                        <ha-icon .icon=${item.icon}></ha-icon>
+                      </button>
+                    `,
+                  )}
+                </div>
+              `,
+            )}
+          </div>
+        </div>
+      </ha-card>
     `;
   }
 

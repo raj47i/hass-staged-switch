@@ -28,6 +28,7 @@ export {
   allOffTargets,
   cardEntities,
   extraStagesHidden,
+  isEmptyStagedSwitchConfig,
   matchingStageIndex,
   stageDesiredStates,
   parseStageIndex,

@@ -345,6 +345,71 @@ const stagedSwitchStyles = css`
   .slider-dot-slot > .tick.active {
     color: var(--primary-text-color);
   }
+
+  .showcase {
+    --power-button-size: 48px;
+    --slider-dot-size: 26px;
+    --slider-button-height: 48px;
+    --slider-icon-size: 20px;
+    --slider-dot-icon-size: 14px;
+    --stage-label-gap: 0px;
+    --stage-label-height: 0px;
+  }
+
+  .showcase .header {
+    padding-bottom: 0;
+  }
+
+  .showcase .slider-section {
+    padding-top: 10px;
+  }
+
+  .showcase-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--slider-button-height);
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(
+      --slider-bar-background,
+      color-mix(
+        in srgb,
+        var(--primary-text-color) 8%,
+        var(--card-background-color, #fff)
+      )
+    );
+  }
+
+  .showcase-track {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--slider-dot-size);
+  }
+
+  .showcase-dots {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+  }
+
+  .showcase-track .slider-line,
+  .showcase-track .slider-fill {
+    left: 0;
+    right: 0;
+    top: 50%;
+  }
+
+  .showcase .power-icon,
+  .showcase .slider-dot,
+  .showcase .switch-status {
+    pointer-events: none;
+    cursor: default;
+  }
 `;
 
 export const cardStyles = [

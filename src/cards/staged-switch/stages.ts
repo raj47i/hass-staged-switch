@@ -235,6 +235,20 @@ export const stageDesiredStates = (
   return desired;
 };
 
+export const isEmptyStagedSwitchConfig = (
+  config?: StagedSwitchCardConfig,
+): boolean => {
+  if (!config) {
+    return true;
+  }
+  if (isValidEntityId(config.entity) || config.stages?.length) {
+    return false;
+  }
+  return !(config.switches ?? []).some((item) =>
+    isValidEntityId(typeof item === "string" ? item : item?.entity),
+  );
+};
+
 export const matchingStageIndex = (
   stages: ResolvedStage[],
   states: Record<string, SwitchState>,
