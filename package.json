@@ -11,7 +11,7 @@
     "hacs"
   ],
   "author": "raj47i",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/raj47i/hass-staged-switch.git"

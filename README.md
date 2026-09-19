@@ -339,4 +339,8 @@ HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 ## License
 
-MIT
+Copyright (C) 2026 raj47i
+
+This project is free software under the [GNU General Public License v3.0 or later](LICENSE).
+
+You can use, share, and change it. A note or thanks is enough if you just use it. If you publish a modified version or something based on this card, you must also release that work as open source under the same license and provide the source. See the [GNU GPL](https://www.gnu.org/licenses/gpl-3.0.html) for the full terms.
