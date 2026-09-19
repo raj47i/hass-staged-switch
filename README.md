@@ -331,10 +331,12 @@ Or just `switch.patio_fan`.
 A lights card with three exclusive rows:
 
 1. **RGB** — Power button labeled RGB, a 1–100% brightness slider (no stage text), then a row of quick color presets. The last control is a custom color picker. Only RGB-capable lights can be added here.
-2. **Warm** — Power button labeled Warm, plus 2–4 intensity stages: Dim, Soft, Medium, Bright (fewer labels when you use fewer stages). Lights or switches.
-3. **White / sun** — the same intensity stages for cool or daylight lights or switches.
+2. **Warm** — Power button labeled Warm, plus intensity stages. Needs at least two lights or switches or the whole row stays hidden. Two entities allow 2–3 stages. Three or more entities allow 2–5 stages. Names are **Min / Low / Medium / High / Max** (Min and Max always stay; the middle names appear as you add stages). Each stage is an on/off mix, same as Staged Switch.
+3. **White / sun** — the same stage limits, names, and per-light on/off setup. Also hidden with fewer than two entities.
 
 Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row.
+
+The editor is two groups of pages, like Staged Switch: first pick RGB, Warm, and White entities, then set each group up. RGB setup chooses the default color swatches and on/off button icons. Warm and White setup choose on/off icons, a stage icon, and which lights are on at each intensity.
 
 All of that state is stored in **one** `input_text` helper as a short JSON string. You do not create a helper per slider.
 
@@ -358,22 +360,46 @@ warm:
 white:
   - light.ceiling
   - light.desk
+warm_stages:
+  - switches:
+      light.floor_lamp: on
+      light.reading: off
+  - switches:
+      light.floor_lamp: on
+      light.reading: on
+white_stages:
+  - switches:
+      light.ceiling: on
+      light.desk: off
+  - switches:
+      light.ceiling: on
+      light.desk: on
 ```
+
+If you omit `warm_stages` / `white_stages`, each intensity is cumulative: Min turns the first light on, the next stage adds the next light, and Max turns the whole row on. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Medium / Max. Three or more default to all five names.
 
 The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1}}`. If the helper is missing, the card still remembers the last values in this browser.
 
 Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
+
+**Directly control lights** is off by default. The card still writes the text helper (and this browser’s memory). Turn the option on if the card should also call `light.turn_on` / `turn_off`.
 
 | Option | Type | Required | Description |
 | --- | --- | --- | --- |
 | `type` | string | yes | `custom:staged-lights-card` |
 | `title` | string | no | Card heading |
 | `entity` | string | recommended | `input_text` that stores the JSON state |
-| `stages` | number | no | Warm/White intensity stages, `2`–`4`. Default is the largest of those rows, at least 2 |
+| `stages` | number | no | Fallback stage count when a row has no map yet. Still clamped per row: 2 lights → max 3, 3+ lights → max 5 |
 | `rgb` | list | no | RGB-capable lights for the color row |
-| `warm` | list | no | Lights or switches for the Warm row |
-| `white` | list | no | Lights or switches for the White row |
-| `direct_control` | boolean | no | Default `true`. `false` only writes the helper |
+| `warm` | list | no | Lights or switches for the Warm row. Row is hidden with fewer than 2 |
+| `white` | list | no | Lights or switches for the White row. Row is hidden with fewer than 2 |
+| `warm_stages` | list | no | Per-intensity on/off map for Warm. Length is that row’s stage count (2–5). Same `switches` shape as Staged Switch, plus optional `icon` |
+| `white_stages` | list | no | Per-intensity on/off map for White. Independent of Warm |
+| `rgb_presets` | list | no | Hex swatches on the RGB row. Defaults to the built-in 8 colors |
+| `rgb_icons` | map | no | `{ on, off }` MDI icons for the RGB power button |
+| `warm_icons` | map | no | `{ on, off }` icons for the Warm power button |
+| `white_icons` | map | no | `{ on, off }` icons for the White power button |
+| `direct_control` | boolean | no | Default `false`. `true` turns lights on/off. `false` only writes the helper |
 | `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom |
 
 RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.

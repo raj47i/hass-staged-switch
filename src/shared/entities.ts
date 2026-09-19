@@ -8,6 +8,17 @@ import type {
   SwitchTarget,
 } from "./types";
 
+export const asArray = <T>(value: unknown): T[] =>
+  Array.isArray(value) ? value.filter((item): item is T => item != null) : [];
+
+export const safeIcon = (value: unknown, fallback = ""): string => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const icon = value.trim();
+  return icon || fallback;
+};
+
 export const isValidEntityId = (entityId?: string): entityId is string =>
   Boolean(entityId && ENTITY_ID_PATTERN.test(entityId));
 
@@ -164,7 +175,7 @@ export const normalizeSwitch = (
   return {
     entity,
     name: value?.name ?? friendlyNameFromEntity(entity),
-    icon: value?.icon,
+    icon: safeIcon(value?.icon) || undefined,
     ...(value?.hide ? { hide: true } : {}),
   };
 };
@@ -176,7 +187,7 @@ export const switchEntry = (
   roster: HideableRoster | undefined,
   entityId: string,
 ): SwitchEntityConfig | undefined => {
-  const raw = (roster?.switches ?? []).find((item) => {
+  const raw = asArray<string | SwitchEntityConfig>(roster?.switches).find((item) => {
     if (typeof item === "string") {
       return item === entityId;
     }

@@ -11,7 +11,7 @@ import {
   fireConfigChanged,
   pickedValue,
 } from "./editor";
-import { isRosterEntity, isRgbCapableLight, isToggleEntity } from "./entities";
+import { asArray, isRosterEntity, isRgbCapableLight, isToggleEntity, safeIcon } from "./entities";
 import {
   errorMessage,
   fireEvent,
@@ -333,6 +333,18 @@ describe("isToggleEntity extras", () => {
     expect(isRgbCapableLight(hass, "light.unloaded")).toBe(true);
     expect(isRgbCapableLight(hass, "light.warm")).toBe(false);
     expect(isRgbCapableLight(hass, "switch.lamp")).toBe(false);
+  });
+});
+
+describe("asArray and safeIcon", () => {
+  it("treats non-lists and blank icons as empty", () => {
+    expect(asArray("light.a")).toEqual([]);
+    expect(asArray(undefined)).toEqual([]);
+    expect(asArray([null, "light.a", undefined])).toEqual(["light.a"]);
+    expect(safeIcon("  mdi:lamp  ")).toBe("mdi:lamp");
+    expect(safeIcon("   ")).toBe("");
+    expect(safeIcon(12, "mdi:fallback")).toBe("mdi:fallback");
+    expect(safeIcon(undefined, "mdi:fallback")).toBe("mdi:fallback");
   });
 });
 

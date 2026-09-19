@@ -9,17 +9,22 @@ export const EDITOR_SELECT_EVENT = "staged-lights-editor-select";
 export const RGB_DOMAINS = ["light"];
 export const STAGE_DOMAINS = ["light", "switch"];
 export const MIN_LIGHT_STAGES = 2;
-export const MAX_LIGHT_STAGES = 4;
+export const MAX_TWO_ENTITY_STAGES = 3;
+export const MAX_LIGHT_STAGES = 5;
 export const DEFAULT_LIGHT_STAGES = 3;
+export const MIN_WARM_WHITE_ENTITIES = 2;
 export const DEFAULT_RGB_HEX = "#ff8a1d";
 export const DEFAULT_RGB_BRIGHTNESS = 180;
 
 export const INTENSITY_NAMES: Record<number, string[]> = {
-  2: ["Dim", "Bright"],
-  3: ["Dim", "Medium", "Bright"],
-  4: ["Dim", "Soft", "Medium", "Bright"],
+  2: ["Min", "Max"],
+  3: ["Min", "Medium", "Max"],
+  4: ["Min", "Low", "High", "Max"],
+  5: ["Min", "Low", "Medium", "High", "Max"],
 };
 
+export const MAX_RGB_PRESETS = 8;
+export const DEFAULT_STAGE_ICON = "mdi:circle-medium";
 export const RGB_PRESETS = [
   "#ff8a1d",
   "#ffc9a3",

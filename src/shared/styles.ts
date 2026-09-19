@@ -208,6 +208,7 @@ export const sharedEditorStyles = css`
   ha-entity-picker,
   ha-area-picker,
   ha-device-picker,
+  ha-icon-picker,
   ha-select {
     width: 100%;
   }

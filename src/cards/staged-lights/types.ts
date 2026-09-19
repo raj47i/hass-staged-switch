@@ -1,4 +1,20 @@
-import type { LovelaceCardConfig, SwitchEntityConfig } from "../../shared/types";
+import type {
+  LovelaceCardConfig,
+  SwitchEntityConfig,
+  SwitchState,
+  SwitchTarget,
+} from "../../shared/types";
+
+export interface LightStageConfig {
+  name?: string;
+  icon?: string;
+  switches?: Record<string, SwitchState> | Array<string | SwitchTarget>;
+}
+
+export interface RowIcons {
+  on?: string;
+  off?: string;
+}
 
 export interface StagedLightsCardConfig extends LovelaceCardConfig {
   type: string;
@@ -8,6 +24,12 @@ export interface StagedLightsCardConfig extends LovelaceCardConfig {
   rgb?: Array<string | SwitchEntityConfig>;
   warm?: Array<string | SwitchEntityConfig>;
   white?: Array<string | SwitchEntityConfig>;
+  warm_stages?: LightStageConfig[];
+  white_stages?: LightStageConfig[];
+  rgb_presets?: string[];
+  rgb_icons?: RowIcons;
+  warm_icons?: RowIcons;
+  white_icons?: RowIcons;
   direct_control?: boolean;
   show_switches?: boolean;
 }

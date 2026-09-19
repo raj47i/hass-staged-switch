@@ -445,5 +445,52 @@ const lightsStyles = css`
   }
 `;
 
+const lightsEditorStyles = css`
+  .step-groups {
+    display: grid;
+    gap: 12px;
+  }
+
+  .step-group {
+    display: grid;
+    gap: 8px;
+  }
+
+  .steps {
+    flex-wrap: wrap;
+  }
+
+  .steps button {
+    flex: 1 1 calc(33.33% - 8px);
+    min-width: 84px;
+  }
+
+  ha-icon-picker {
+    width: 100%;
+  }
+
+  .preset-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .preset-row input[type="color"] {
+    width: 48px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+  }
+
+  .preset-row .hex {
+    flex: 1 1 auto;
+    font-size: 13px;
+    color: var(--secondary-text-color);
+  }
+`;
+
 export const cardStyles = [sharedCardChrome, sharedEntityChips, lightsStyles];
-export const editorStyles = [sharedEditorStyles];
+export const editorStyles = [sharedEditorStyles, lightsEditorStyles];

@@ -21,12 +21,12 @@ import {
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
 import { hexToRgb, normalizeHex } from "./color";
+import { lightsDirectControl, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   CARD_NAME,
   CARD_TITLE,
   DEFAULT_RGB_HEX,
   DEFAULT_TITLE,
-  RGB_PRESETS,
   ROW_META,
   ROW_ORDER,
   SHOWCASE_TITLE,
@@ -46,7 +46,8 @@ import {
   intensityNames,
   lightsStageCount,
   percentToBrightness,
-  splitRowIds,
+  resolveRowStageTargets,
+  splitStageTargets,
   stageToBrightness,
 } from "./stages";
 import { activeLightRow, exclusiveLightsState, parseLightsState, serializeLightsState } from "./state";
@@ -77,7 +78,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       rgb: [],
       warm: [],
       white: [],
-      direct_control: true,
+      direct_control: false,
       show_switches: false,
     };
   }
@@ -132,12 +133,17 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     return readStoredLightsState(this._storageKey) ?? parseLightsState();
   }
 
-  private get _stageCount() {
-    return lightsStageCount(this._config);
+  private _stageCount(row: "warm" | "white") {
+    return lightsStageCount(this._config, row);
   }
 
   private get _rows(): LightRowId[] {
     return configuredRows(this._config);
+  }
+
+  private get _activeRow(): LightRowId | undefined {
+    const active = activeLightRow(this._current);
+    return active && this._rows.includes(active) ? active : undefined;
   }
 
   private get _visibleEntities() {
@@ -215,28 +221,36 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
   }
 
+  private get _directControl() {
+    return lightsDirectControl(this._config);
+  }
+
   private async _turnOff(entityIds: string[]): Promise<void> {
     await applyToggleTargets(
       this.hass,
       entityIds.filter(isValidEntityId).map((entity) => ({ entity, state: "off" as const })),
+      this._directControl,
     );
   }
 
   private async _turnOnRow(row: "warm" | "white", state: LightsCardState): Promise<void> {
-    const count = this._stageCount;
-    const { lights, switches } = splitRowIds(this._rowIds(row));
-    await applyLightLooks(this.hass, lights, {
-      on: true,
-      brightness: stageToBrightness(state[row].stage, count),
-    });
-    await applyToggleTargets(
+    const stage = state[row]?.stage ?? 1;
+    const targets = resolveRowStageTargets(this._config, row, stage);
+    const { onLights, rest } = splitStageTargets(targets);
+    await applyLightLooks(
       this.hass,
-      switches.map((entity) => ({ entity, state: "on" as const })),
+      onLights,
+      {
+        on: true,
+        brightness: stageToBrightness(stage, this._stageCount(row)),
+      },
+      this._directControl,
     );
+    await applyToggleTargets(this.hass, rest, this._directControl);
   }
 
   private async _applyMode(state: LightsCardState): Promise<void> {
-    if (this._config?.direct_control === false) {
+    if (!this._directControl) {
       return;
     }
     const rgb = this._rowIds("rgb");
@@ -254,11 +268,16 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
     await this._turnOff(off);
     if (state.rgb?.on) {
-      await applyLightLooks(this.hass, rgb, {
-        on: true,
-        brightness: clamp(state.rgb.brightness, 1, 255),
-        rgb: hexToRgb(state.rgb.hex || DEFAULT_RGB_HEX),
-      });
+      await applyLightLooks(
+        this.hass,
+        rgb,
+        {
+          on: true,
+          brightness: clamp(Number(state.rgb.brightness) || 1, 1, 255),
+          rgb: hexToRgb(state.rgb.hex || DEFAULT_RGB_HEX),
+        },
+        this._directControl,
+      );
       return;
     }
     if (state.warm?.on) {
@@ -283,9 +302,12 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   private _selectStage(row: "warm" | "white", stage: number): void {
+    if (!Number.isFinite(stage)) {
+      return;
+    }
     this._commit(
       exclusiveLightsState(this._current, row, {
-        stage: clamp(stage, 1, this._stageCount),
+        stage: clamp(stage, 1, this._stageCount(row)),
       }),
     );
   }
@@ -328,7 +350,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return;
     }
     void this._run(async () => {
-      if (!this.hass || this._config?.direct_control === false) {
+      if (!this.hass || !this._directControl) {
         return;
       }
       await setEntityOnOff(this.hass, entityId, actual !== "on");
@@ -391,7 +413,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
           aria-label="${meta.label} ${label}"
           aria-pressed=${on && stage === current}
         >
-          <ha-icon .icon=${"mdi:circle-medium"}></ha-icon>
+          <ha-icon .icon=${rowStageIcon(this._config, row, stage)}></ha-icon>
         </button>
         <span class="tick ${on && stage === current ? "active" : ""}">${label}</span>
       </div>
@@ -405,6 +427,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   private _renderPower(row: LightRowId) {
     const meta = ROW_META[row];
     const on = this._rowIsOn(row);
+    const icons = rowPowerIcons(this._config, row);
     return html`
       <button
         class="power-icon ${on ? "on" : "off"}"
@@ -413,7 +436,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
         aria-pressed=${on}
         @click=${() => this._toggleRow(row)}
       >
-        <ha-icon .icon=${meta.icon}></ha-icon>
+        <ha-icon .icon=${on ? icons.on : icons.off}></ha-icon>
         <span class="tick ${on ? "active" : ""}">${meta.label}</span>
       </button>
     `;
@@ -423,7 +446,8 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     const rgb = this._current.rgb;
     const color = rgb?.hex || DEFAULT_RGB_HEX;
     const percent = brightnessToPercent(rgb?.brightness ?? 1);
-    const selectedPreset = RGB_PRESETS.find(
+    const presets = resolveRgbPresets(this._config);
+    const selectedPreset = presets.find(
       (preset) => normalizeHex(preset, "") === normalizeHex(color, ""),
     );
     return html`
@@ -442,7 +466,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
           @change=${showcase ? undefined : this._onBrightness}
         />
         <div class="presets">
-          ${RGB_PRESETS.map(
+          ${presets.map(
             (hex) => html`
               <button
                 class="swatch ${selectedPreset === hex ? "selected" : ""}"
@@ -471,7 +495,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
   private _renderStageControls(row: "warm" | "white", rowIndex = 1) {
     const meta = ROW_META[row];
-    const count = this._stageCount;
+    const count = this._stageCount(row);
     const names = intensityNames(count);
     const rowState = this._current[row];
     const current = clamp(rowState?.stage ?? 1, 1, count);
@@ -540,7 +564,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return `${brightnessToPercent(current.rgb.brightness)}%`;
     }
     if (active === "warm" || active === "white") {
-      return intensityName(current[active].stage, this._stageCount);
+      return intensityName(current[active].stage, this._stageCount(active));
     }
     return "Off";
   }
@@ -559,8 +583,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return html`<ha-card><div class="warning">Invalid helper: ${this._config.entity}</div></ha-card>`;
     }
 
-    const current = this._current;
-    const active = activeLightRow(current);
+    const active = this._activeRow;
 
     return html`
       <ha-card>
@@ -593,7 +616,7 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "Room lights as three exclusive rows: RGB brightness and color presets, plus Warm and White intensity stages. One text helper stores the whole card.",
+    "Room lights as exclusive rows: RGB brightness and color presets, plus Warm and White stages (Min to Max) when each has at least two lights. One text helper stores the whole card.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
