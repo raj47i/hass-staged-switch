@@ -330,8 +330,8 @@ Or just `switch.patio_fan`.
 
 A lights card with three exclusive rows:
 
-1. **RGB** — Power button labeled RGB, a 1–100% brightness slider (no stage text), then a row of quick color presets. The last control is a custom color picker. Only RGB-capable lights can be added here.
-2. **Warm** — Power button labeled Warm, plus intensity stages. Needs at least two lights or switches or the whole row stays hidden. Two entities allow 2–3 stages. Three or more entities allow 2–5 stages. Names are **Min / Low / Medium / High / Max** (Min and Max always stay; the middle names appear as you add stages). Each stage is an on/off mix, same as Staged Switch.
+1. **RGB** — Power button labeled RGB, a 1–100% brightness slider with the percent to the right (always visible, above the custom color picker), then a row of quick color presets. Only RGB-capable lights can be added here.
+2. **Warm** — Power button labeled Warm, plus intensity stages. Needs at least two lights or switches or the whole row stays hidden. Two entities allow 2–3 stages. Three or more entities allow 2–5 stages. Names are **Min / Low / Mid / High / Max** (Min and Max always stay; the middle names appear as you add stages). Each stage is an on/off mix, same as Staged Switch.
 3. **White / sun** — the same stage limits, names, and per-light on/off setup. Also hidden with fewer than two entities.
 
 Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row.
@@ -376,7 +376,7 @@ white_stages:
       light.desk: on
 ```
 
-If you omit `warm_stages` / `white_stages`, each intensity is cumulative: Min turns the first light on, the next stage adds the next light, and Max turns the whole row on. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Medium / Max. Three or more default to all five names.
+If you omit `warm_stages` / `white_stages`, each intensity is cumulative: Min turns the first light on, the next stage adds the next light, and Max turns the whole row on. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Mid / Max. Three or more default to all five names.
 
 The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1}}`. If the helper is missing, the card still remembers the last values in this browser.
 
@@ -430,7 +430,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.3-beta`.
+2. Commit and tag, for example `v0.0.4-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

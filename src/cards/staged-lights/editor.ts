@@ -483,7 +483,7 @@ export class StagedLightsCardEditor extends LitElement {
       return html`
         <span class="help">
           Add at least ${MIN_WARM_WHITE_ENTITIES} ${ROW_META[row].label} entities
-          first. Min and Max then stay as stages; Low / Medium / High are
+          first. Min and Max then stay as stages; Low / Mid / High are
           optional.
         </span>
       `;
@@ -497,8 +497,8 @@ export class StagedLightsCardEditor extends LitElement {
         <span class="label">${ROW_META[row].label} stages</span>
         <span class="help">
           Min and Max always stay. Two lights allow up to 3 stages (Min /
-          Medium / Max). Three or more lights allow up to 5: Min / Low /
-          Medium / High / Max.
+          Mid / Max). Three or more lights allow up to 5: Min / Low /
+          Mid / High / Max.
         </span>
         <ha-textfield
           type="number"
@@ -524,7 +524,7 @@ export class StagedLightsCardEditor extends LitElement {
             (label, stageIndex) => html`
               <div class="item">
                 <span class="label">${maps[stageIndex]?.name?.trim() || label}</span>
-                ${this._renderIconPicker( `${label} icon`, maps[stageIndex]?.icon, (icon) =>
+                ${this._renderIconPicker(`${label} icon`, maps[stageIndex]?.icon, (icon) =>
                   this._setStageIcon(row, stageIndex, icon),
                 )}
                 ${roster.map(

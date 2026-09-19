@@ -1,6 +1,6 @@
 {
   "name": "staged-switch-card",
-  "version": "0.0.3-beta",
+  "version": "0.0.4-beta",
   "description": "Home Assistant Lovelace cards for grouped switch, light, and fan control",
   "keywords": [
     "home-assistant",

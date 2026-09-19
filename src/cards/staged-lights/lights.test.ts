@@ -13,10 +13,14 @@ import {
   alignedStageMaps,
   brightnessToPercent,
   configuredRows,
+  displayRgbPercent,
   intensityName,
   intensityNames,
+  lightsHeaderValue,
+  lightsLayoutRows,
   lightsStageCount,
   maxRowStages,
+  parseRgbPercent,
   percentToBrightness,
   resolveRowStageTargets,
   splitRowIds,
@@ -24,8 +28,15 @@ import {
   stageToBrightness,
 } from "./stages";
 import {
+  lightsStorageKey,
+  readStoredLightsState,
+  resolveLightsState,
+  writeStoredLightsState,
+} from "./persist";
+import {
   activeLightRow,
   exclusiveLightsState,
+  isLightsHelperPayload,
   parseLightsState,
   serializeLightsState,
 } from "./state";
@@ -113,11 +124,18 @@ describe("intensity stages", () => {
     expect(lightsStageCount({ ...two, stages: 5 }, "warm")).toBe(3);
     expect(lightsStageCount({ ...many, stages: 2 }, "warm")).toBe(2);
     expect(intensityNames(2)).toEqual(["Min", "Max"]);
-    expect(intensityNames(3)).toEqual(["Min", "Medium", "Max"]);
-    expect(intensityNames(5)).toEqual(["Min", "Low", "Medium", "High", "Max"]);
+    expect(intensityNames(3)).toEqual(["Min", "Mid", "Max"]);
+    expect(intensityNames(4)).toEqual(["Min", "Low", "High", "Max"]);
+    expect(intensityNames(5)).toEqual(["Min", "Low", "Mid", "High", "Max"]);
+    expect(intensityNames(1)).toEqual(["Min", "Max"]);
+    expect(intensityNames(99)).toEqual(["Min", "Low", "Mid", "High", "Max"]);
     expect(intensityName(1, 5)).toBe("Min");
+    expect(intensityName(3, 5)).toBe("Mid");
+    expect(intensityName(2, 3)).toBe("Mid");
     expect(intensityName(5, 5)).toBe("Max");
     expect(intensityName(2, 2)).toBe("Max");
+    expect(intensityName(1.4, 3)).toBe("Min");
+    expect(intensityName(1.6, 3)).toBe("Mid");
     expect(stageToBrightness(1, 3)).toBe(85);
     expect(stageToBrightness(3, 3)).toBe(255);
     expect(brightnessToPercent(255)).toBe(100);
@@ -365,6 +383,137 @@ describe("edge cases", () => {
     expect(resolveRowStageTargets(junk, "white", 1).map((item) => item.state)).toEqual(["on"]);
     expect(resolveRgbPresets(junk)).toEqual(["#00ff00", "#00ff00"]);
     expect(() => alignedStageMaps(junk, "warm")).not.toThrow();
+  });
+
+  it("parses slider percents and keeps RGB percent out of the header", () => {
+    expect(parseRgbPercent(undefined)).toBeUndefined();
+    expect(parseRgbPercent("")).toBe(1);
+    expect(parseRgbPercent("nope")).toBeUndefined();
+    expect(parseRgbPercent(0)).toBe(1);
+    expect(parseRgbPercent(70.4)).toBe(70);
+    expect(parseRgbPercent("100")).toBe(100);
+    expect(parseRgbPercent(140)).toBe(100);
+    expect(displayRgbPercent(180)).toBe(71);
+    expect(displayRgbPercent(180, 40)).toBe(40);
+    expect(displayRgbPercent(Number.NaN, Number.NaN)).toBe(1);
+    expect(lightsHeaderValue("rgb", 3, 5)).toBeUndefined();
+    expect(lightsHeaderValue("warm", 2, 3)).toBe("Mid");
+    expect(lightsHeaderValue("white", 3, 5)).toBe("Mid");
+    expect(lightsHeaderValue("white", 99, 5)).toBe("Max");
+    expect(lightsHeaderValue(undefined)).toBeUndefined();
+    expect(brightnessToPercent(percentToBrightness(1))).toBe(1);
+    expect(brightnessToPercent(percentToBrightness(70))).toBe(70);
+    expect(brightnessToPercent(percentToBrightness(100))).toBe(100);
+  });
+
+  it("sizes the card for empty, RGB-only, and chip layouts", () => {
+    expect(lightsLayoutRows(undefined)).toBe(4);
+    expect(lightsLayoutRows({ type: "custom:staged-lights-card" })).toBe(4);
+    expect(
+      lightsLayoutRows({ type: "custom:staged-lights-card", rgb: ["light.sofa"] }),
+    ).toBe(4);
+    expect(
+      lightsLayoutRows({
+        type: "custom:staged-lights-card",
+        rgb: ["light.sofa"],
+        warm: ["light.a", "light.b"],
+        white: ["light.x", "light.y", "light.z"],
+      }),
+    ).toBe(6);
+    expect(
+      lightsLayoutRows({
+        type: "custom:staged-lights-card",
+        rgb: ["light.sofa"],
+        show_switches: true,
+      }),
+    ).toBe(5);
+    expect(
+      lightsLayoutRows({
+        type: "custom:staged-lights-card",
+        rgb: ["light.sofa"],
+        show_switches: false,
+      }),
+    ).toBe(4);
+  });
+
+  it("keeps the last remembered state when the helper is unavailable", () => {
+    expect(isLightsHelperPayload('{"r":{"o":1}}')).toBe(true);
+    expect(isLightsHelperPayload("  {\"w\":{\"o\":1,\"s\":2}}  ")).toBe(true);
+    expect(isLightsHelperPayload("unavailable")).toBe(false);
+    expect(isLightsHelperPayload("unknown")).toBe(false);
+    expect(isLightsHelperPayload("")).toBe(false);
+    expect(isLightsHelperPayload("{")).toBe(false);
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+    });
+    const key = lightsStorageKey({ type: "custom:staged-lights-card", entity: "input_text.room" });
+    writeStoredLightsState(key, {
+      rgb: { on: false, brightness: 90, hex: "#ffffff" },
+      warm: { on: true, stage: 2 },
+      white: { on: false, stage: 1 },
+    });
+    expect(resolveLightsState("unavailable", key).warm).toEqual({ on: true, stage: 2 });
+    expect(resolveLightsState("unknown", key).rgb.on).toBe(false);
+    expect(resolveLightsState("", key).warm.stage).toBe(2);
+    expect(resolveLightsState('{"r":{"o":1,"b":40,"c":"#2196f3"}}', key).rgb).toEqual({
+      on: true,
+      brightness: 40,
+      hex: "#2196f3",
+    });
+    expect(resolveLightsState(undefined, "missing-key").rgb.on).toBe(true);
+  });
+
+  it("reads string flags and stores helper JSON in localStorage", () => {
+    expect(parseLightsState('{"r":{"o":"true","b":180,"c":"#2196f3"}}').rgb.on).toBe(true);
+    expect(parseLightsState('{"r":{"o":"false","b":180},"w":{"o":"true","s":2}}').warm.on).toBe(
+      true,
+    );
+    expect(parseLightsState('{"r":{"o":"false"},"n":{"o":"1","s":3}}').white).toEqual({
+      on: true,
+      stage: 3,
+    });
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+    });
+    const key = lightsStorageKey({ type: "custom:staged-lights-card", entity: "input_text.room" });
+    expect(key).toBe("staged-lights-card:input_text.room");
+    expect(readStoredLightsState(key)).toBeUndefined();
+    writeStoredLightsState(key, {
+      rgb: { on: false, brightness: 90, hex: "#ffffff" },
+      warm: { on: true, stage: 2 },
+      white: { on: false, stage: 1 },
+    });
+    expect(readStoredLightsState(key)?.warm).toEqual({ on: true, stage: 2 });
+    expect(readStoredLightsState(key)?.rgb.hex).toBe("#ffffff");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: () => {
+          throw new Error("blocked");
+        },
+        setItem: () => {
+          throw new Error("quota");
+        },
+      },
+    });
+    expect(readStoredLightsState(key)).toBeUndefined();
+    expect(() =>
+      writeStoredLightsState(key, parseLightsState()),
+    ).not.toThrow();
   });
 
   it("keeps serialized helper JSON under 255 characters", () => {

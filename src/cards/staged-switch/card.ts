@@ -112,6 +112,8 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   public getGridOptions() {
     return {
       columns: 12,
+      min_columns: 6,
+      max_columns: 12,
       min_rows: isEmptyStagedSwitchConfig(this._config)
         ? 4
         : 2 + this._entityButtonRows,

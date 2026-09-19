@@ -126,7 +126,7 @@ describe("applyToggleTargets", () => {
     await setEntityOnOff(hass, "fan.patio", true);
     await setInputNumber(hass, "input_number.scene", 2);
     await setInputText(hass, "input_text.room", "{\"r\":1}");
-    await applyLightLooks(hass, ["light.sofa"], {
+    await applyLightLooks(hass, ["light.sofa", "", "not-an-id"], {
       on: true,
       brightness: 180,
       rgb: [255, 152, 0],

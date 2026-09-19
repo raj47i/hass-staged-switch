@@ -31,28 +31,37 @@ const lightsStyles = css`
     --slider-button-height: 64px;
     --slider-dot-size: 36px;
     --slider-track-height: 3px;
-    --slider-well-pad-x: 10px;
-    --power-button-size: 64px;
+    --slider-well-pad-x: 8px;
+    --power-button-size: 56px;
     --slider-icon-size: 24px;
     --slider-dot-icon-size: 20px;
     --stage-label-gap: 3px;
     --stage-label-height: 12px;
     --preset-height: 26px;
+    --rgb-value-width: 36px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
     padding: 8px 16px 16px;
   }
 
   .mode-group {
-    --mode-gap: 10px;
+    --mode-gap: 8px;
     display: grid;
     grid-template-columns: var(--power-button-size) minmax(0, 1fr);
     grid-template-rows: repeat(var(--mode-rows, 3), minmax(var(--slider-button-height), auto));
     column-gap: var(--mode-gap);
     row-gap: 0;
     align-items: stretch;
+    overflow: hidden;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
     padding: 8px var(--slider-well-pad-x);
     border-radius: 8px;
     background: var(
@@ -102,8 +111,10 @@ const lightsStyles = css`
     display: flex;
     grid-column: 2;
     align-self: stretch;
+    overflow: hidden;
     min-width: 0;
     width: 100%;
+    max-width: 100%;
     padding: 0;
   }
 
@@ -113,22 +124,47 @@ const lightsStyles = css`
   }
 
   .rgb-controls {
-    flex-direction: column;
-    justify-content: center;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rgb-value-width);
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 8px;
+    min-width: 0;
     min-height: var(--slider-button-height);
+  }
+
+  .brightness-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--primary-text-color);
   }
 
   .stage-controls {
     align-items: center;
     justify-content: space-between;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     min-height: var(--slider-button-height);
   }
 
   .slider-visual {
     position: absolute;
-    left: calc(var(--slider-dot-size) / 2);
-    right: calc(var(--slider-dot-size) / 2);
+    left: min(
+      calc(var(--slider-dot-size) / 2),
+      calc(100% / (2 * var(--stage-count, 2)))
+    );
+    right: min(
+      calc(var(--slider-dot-size) / 2),
+      calc(100% / (2 * var(--stage-count, 2)))
+    );
     top: calc(
       50% - (var(--stage-label-gap) + var(--stage-label-height)) / 2
     );
@@ -221,6 +257,8 @@ const lightsStyles = css`
   .brightness {
     display: block;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: 14px;
     margin: 0;
     appearance: none;
@@ -252,13 +290,15 @@ const lightsStyles = css`
 
   .presets {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
   }
 
-  .swatch,
-  .picker-wrap {
+  .swatch {
     flex: 1 1 0;
     min-width: 0;
     height: var(--preset-height);
@@ -279,6 +319,9 @@ const lightsStyles = css`
 
   .picker-wrap {
     position: relative;
+    width: 100%;
+    min-width: 0;
+    height: var(--preset-height);
   }
 
   .picker-button {
@@ -315,22 +358,26 @@ const lightsStyles = css`
     position: relative;
     z-index: 2;
     display: flex;
+    flex: 0 1 var(--slider-dot-size);
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     gap: var(--stage-label-gap);
+    width: var(--slider-dot-size);
     min-width: 0;
+    max-width: 100%;
     cursor: pointer;
   }
 
   .slider-dot {
     position: relative;
     display: inline-flex;
-    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: var(--slider-dot-size);
-    height: var(--slider-dot-size);
+    width: 100%;
+    max-width: var(--slider-dot-size);
+    aspect-ratio: 1;
+    height: auto;
     padding: 0;
     border: 0;
     border-radius: 8px;
@@ -423,6 +470,7 @@ const lightsStyles = css`
     --slider-icon-size: 20px;
     --slider-dot-icon-size: 14px;
     --preset-height: 18px;
+    --rgb-value-width: 28px;
   }
 
   .showcase .header {

@@ -2,7 +2,7 @@ import {
   cardStorageKey as scopedStorageKey,
 } from "../../shared/persist";
 import { CARD_NAME } from "./const";
-import { parseLightsState, serializeLightsState } from "./state";
+import { isLightsHelperPayload, parseLightsState, serializeLightsState } from "./state";
 import type { LightsCardState, StagedLightsCardConfig } from "./types";
 
 export const lightsStorageKey = (config?: StagedLightsCardConfig): string =>
@@ -18,6 +18,16 @@ export const readStoredLightsState = (key: string): LightsCardState | undefined 
   } catch {
     return undefined;
   }
+};
+
+export const resolveLightsState = (
+  helperState: unknown,
+  storageKey: string,
+): LightsCardState => {
+  if (typeof helperState === "string" && isLightsHelperPayload(helperState)) {
+    return parseLightsState(helperState);
+  }
+  return readStoredLightsState(storageKey) ?? parseLightsState();
 };
 
 export const writeStoredLightsState = (key: string, state: LightsCardState): void => {

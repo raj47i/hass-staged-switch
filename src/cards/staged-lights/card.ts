@@ -32,7 +32,7 @@ import {
   SHOWCASE_TITLE,
 } from "./const";
 import "./editor";
-import { lightsStorageKey, readStoredLightsState, writeStoredLightsState } from "./persist";
+import { lightsStorageKey, resolveLightsState, writeStoredLightsState } from "./persist";
 import {
   isEmptyLightsConfig,
   relevantLightEntityIds,
@@ -40,17 +40,19 @@ import {
   visibleLights,
 } from "./roster";
 import {
-  brightnessToPercent,
   configuredRows,
-  intensityName,
+  displayRgbPercent,
   intensityNames,
+  lightsHeaderValue,
+  lightsLayoutRows,
   lightsStageCount,
+  parseRgbPercent,
   percentToBrightness,
   resolveRowStageTargets,
   splitStageTargets,
   stageToBrightness,
 } from "./stages";
-import { activeLightRow, exclusiveLightsState, parseLightsState, serializeLightsState } from "./state";
+import { activeLightRow, exclusiveLightsState, serializeLightsState } from "./state";
 import { cardStyles } from "./styles";
 import type {
   LightRowId,
@@ -65,6 +67,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   @state() private _state?: LightsCardState;
   @state() private _pending = false;
   @state() private _error?: string;
+  @state() private _rgbDragPercent?: number;
   private _queue = new SerialActionQueue<() => Promise<void>>();
 
   public static async getConfigElement() {
@@ -89,24 +92,21 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
     this._config = { ...config };
     this._state = undefined;
+    this._rgbDragPercent = undefined;
     this._queue.clear();
     this._error = undefined;
   }
 
   public getCardSize(): number {
-    if (isEmptyLightsConfig(this._config)) {
-      return 4;
-    }
-    const rgbExtra = this._rowIds("rgb").length ? 1 : 0;
-    return 2 + this._rows.length + rgbExtra + this._entityButtonRows;
+    return lightsLayoutRows(this._config);
   }
 
   public getGridOptions() {
     return {
       columns: 12,
-      min_rows: isEmptyLightsConfig(this._config)
-        ? 4
-        : 2 + this._rows.length + (this._rowIds("rgb").length ? 1 : 0) + this._entityButtonRows,
+      min_columns: 6,
+      max_columns: 12,
+      min_rows: lightsLayoutRows(this._config),
     };
   }
 
@@ -126,11 +126,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     if (this._state) {
       return this._state;
     }
-    const helperState = this._helper?.state;
-    if (typeof helperState === "string") {
-      return parseLightsState(helperState);
-    }
-    return readStoredLightsState(this._storageKey) ?? parseLightsState();
+    return resolveLightsState(this._helper?.state, this._storageKey);
   }
 
   private _stageCount(row: "warm" | "white") {
@@ -153,16 +149,13 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     return visibleLights(this._config);
   }
 
-  private get _entityButtonRows(): number {
-    return chunkEvenly(this._visibleEntities).length;
-  }
-
   protected shouldUpdate(changed: PropertyValues): boolean {
     if (
       changed.has("_config") ||
       changed.has("_state") ||
       changed.has("_pending") ||
-      changed.has("_error")
+      changed.has("_error") ||
+      changed.has("_rgbDragPercent")
     ) {
       return true;
     }
@@ -266,7 +259,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     if (!state.white?.on) {
       off.push(...white);
     }
-    await this._turnOff(off);
+    await this._turnOff([...new Set(off)]);
     if (state.rgb?.on) {
       await applyLightLooks(
         this.hass,
@@ -307,7 +300,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
     this._commit(
       exclusiveLightsState(this._current, row, {
-        stage: clamp(stage, 1, this._stageCount(row)),
+        stage: clamp(Math.round(stage), 1, this._stageCount(row)),
       }),
     );
   }
@@ -316,15 +309,27 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     this._commit(exclusiveLightsState(this._current, "rgb", patch));
   }
 
+  private _rgbPercentValue(event: Event): number | undefined {
+    if (!(event.target instanceof HTMLInputElement)) {
+      return undefined;
+    }
+    return parseRgbPercent(event.target.value);
+  }
+
+  private _onBrightnessInput(ev: Event): void {
+    const percent = this._rgbPercentValue(ev);
+    if (percent === undefined) {
+      return;
+    }
+    this._rgbDragPercent = percent;
+  }
+
   private _onBrightness(ev: Event): void {
-    const target = ev.target;
-    if (!(target instanceof HTMLInputElement)) {
+    const percent = this._rgbPercentValue(ev);
+    if (percent === undefined) {
       return;
     }
-    const percent = Number(target.value);
-    if (!Number.isFinite(percent)) {
-      return;
-    }
+    this._rgbDragPercent = undefined;
     this._setRgb({ on: true, brightness: percentToBrightness(percent) });
   }
 
@@ -445,7 +450,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   private _renderRgbControls(showcase = false, rowIndex = 1) {
     const rgb = this._current.rgb;
     const color = rgb?.hex || DEFAULT_RGB_HEX;
-    const percent = brightnessToPercent(rgb?.brightness ?? 1);
+    const percent = displayRgbPercent(rgb?.brightness ?? 1, this._rgbDragPercent);
     const presets = resolveRgbPresets(this._config);
     const selectedPreset = presets.find(
       (preset) => normalizeHex(preset, "") === normalizeHex(color, ""),
@@ -463,8 +468,10 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
           max="100"
           .value=${String(percent)}
           aria-label="RGB brightness"
+          @input=${showcase ? undefined : this._onBrightnessInput}
           @change=${showcase ? undefined : this._onBrightness}
         />
+        <span class="brightness-value" aria-hidden="true">${percent}%</span>
         <div class="presets">
           ${presets.map(
             (hex) => html`
@@ -478,17 +485,17 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
               ></button>
             `,
           )}
-          <label class="picker-wrap ${selectedPreset ? "" : "selected"}" title="Custom color">
-            <button class="picker-button" type="button" tabindex="-1" aria-hidden="true"></button>
-            <input
-              type="color"
-              .value=${color}
-              aria-label="Custom RGB color"
-              ?disabled=${showcase}
-              @input=${showcase ? undefined : this._onCustomColor}
-            />
-          </label>
         </div>
+        <label class="picker-wrap ${selectedPreset ? "" : "selected"}" title="Custom color">
+          <button class="picker-button" type="button" tabindex="-1" aria-hidden="true"></button>
+          <input
+            type="color"
+            .value=${color}
+            aria-label="Custom RGB color"
+            ?disabled=${showcase}
+            @input=${showcase ? undefined : this._onCustomColor}
+          />
+        </label>
       </div>
     `;
   }
@@ -498,7 +505,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     const count = this._stageCount(row);
     const names = intensityNames(count);
     const rowState = this._current[row];
-    const current = clamp(rowState?.stage ?? 1, 1, count);
+    const current = clamp(Math.round(rowState?.stage ?? 1), 1, count);
     const fill = rowFillPercent(
       Array.from({ length: count }, (_, index) => index + 1),
       current,
@@ -549,7 +556,6 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
             <h2 class="title">${SHOWCASE_TITLE}</h2>
             <div class="stage-name">${ROW_META.rgb.label}</div>
           </div>
-          <div class="stage-value">70%</div>
         </div>
         <div class="slider-section">
           ${this._renderModeGroup(true)}
@@ -558,15 +564,13 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     `;
   }
 
-  private _headerValue(active: LightRowId | undefined): string {
-    const current = this._current;
-    if (active === "rgb") {
-      return `${brightnessToPercent(current.rgb.brightness)}%`;
-    }
-    if (active === "warm" || active === "white") {
-      return intensityName(current[active].stage, this._stageCount(active));
-    }
-    return "Off";
+  private _headerValue(active: LightRowId | undefined): string | undefined {
+    const staged = active === "warm" || active === "white";
+    return lightsHeaderValue(
+      active,
+      staged ? this._current[active]?.stage : undefined,
+      staged ? this._stageCount(active) : undefined,
+    );
   }
 
   protected render() {
@@ -584,6 +588,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     }
 
     const active = this._activeRow;
+    const headerValue = this._headerValue(active);
 
     return html`
       <ha-card>
@@ -592,7 +597,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
             <h2 class="title">${this._config.title ?? DEFAULT_TITLE}</h2>
             <div class="stage-name">${active ? ROW_META[active].label : "Off"}</div>
           </div>
-          <div class="stage-value">${this._headerValue(active)}</div>
+          ${headerValue ? html`<div class="stage-value">${headerValue}</div>` : nothing}
         </div>
         ${this._error ? html`<div class="warning">${this._error}</div>` : nothing}
         ${this._config.entity && !this._helper

@@ -16,23 +16,6 @@ export const rowRoster = (
     .map(normalizeSwitch)
     .filter((item) => isValidEntityId(item.entity));
 
-export const rowTargets = (
-  config: StagedLightsCardConfig | undefined,
-  row: LightRowId,
-): SwitchTarget[] =>
-  rowRoster(config, row).map((item) => ({
-    entity: item.entity,
-    name: item.name,
-    icon: item.icon,
-    state: "off" as const,
-  }));
-
-export const visibleRowTargets = (
-  config: StagedLightsCardConfig | undefined,
-  row: LightRowId,
-): SwitchTarget[] =>
-  visibleCardEntities({ switches: config?.[row] }, rowTargets(config, row));
-
 export const allRosterItems = (config?: StagedLightsCardConfig): SwitchEntityConfig[] => {
   const seen = new Set<string>();
   const items: SwitchEntityConfig[] = [];
@@ -47,14 +30,6 @@ export const allRosterItems = (config?: StagedLightsCardConfig): SwitchEntityCon
   });
   return items;
 };
-
-export const allLightTargets = (config?: StagedLightsCardConfig): SwitchTarget[] =>
-  allRosterItems(config).map((item) => ({
-    entity: item.entity,
-    name: item.name,
-    icon: item.icon,
-    state: "off" as const,
-  }));
 
 export const visibleLights = (config?: StagedLightsCardConfig): SwitchTarget[] => {
   const items = configuredRosterItems(config);

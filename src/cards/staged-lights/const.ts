@@ -1,7 +1,5 @@
-import { PACKAGE_VERSION } from "../../shared/const";
 import type { LightRowId } from "./types";
 
-export const CARD_VERSION = PACKAGE_VERSION;
 export const CARD_NAME = "staged-lights-card";
 export const CARD_TITLE = "Staged Lights Card";
 export const DEFAULT_TITLE = "Room lights";
@@ -18,9 +16,9 @@ export const DEFAULT_RGB_BRIGHTNESS = 180;
 
 export const INTENSITY_NAMES: Record<number, string[]> = {
   2: ["Min", "Max"],
-  3: ["Min", "Medium", "Max"],
+  3: ["Min", "Mid", "Max"],
   4: ["Min", "Low", "High", "Max"],
-  5: ["Min", "Low", "Medium", "High", "Max"],
+  5: ["Min", "Low", "Mid", "High", "Max"],
 };
 
 export const MAX_RGB_PRESETS = 8;
@@ -48,5 +46,3 @@ export const ROW_META: Record<
 };
 
 export const SHOWCASE_TITLE = "Living room";
-export const SHOWCASE_STAGE_COUNT = 3;
-export const SHOWCASE_CURRENT_STAGE = 2;

@@ -15,10 +15,10 @@ const defaultState = (): LightsCardState => ({
 });
 
 const parseFlag = (value: unknown, fallback: boolean): boolean => {
-  if (value === true || value === 1 || value === "1" || value === "on") {
+  if (value === true || value === 1 || value === "1" || value === "on" || value === "true") {
     return true;
   }
-  if (value === false || value === 0 || value === "0" || value === "off") {
+  if (value === false || value === 0 || value === "0" || value === "off" || value === "false") {
     return false;
   }
   return fallback;
@@ -98,6 +98,14 @@ export const activeLightRow = (state?: LightsCardState): LightRowId | undefined 
     return "white";
   }
   return undefined;
+};
+
+export const isLightsHelperPayload = (raw?: string): boolean => {
+  if (typeof raw !== "string") {
+    return false;
+  }
+  const trimmed = raw.trim();
+  return trimmed.startsWith("{") && trimmed.endsWith("}");
 };
 
 export const parseLightsState = (raw?: string): LightsCardState => {

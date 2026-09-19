@@ -1,4 +1,5 @@
 import { clamp } from "../../shared/hass";
+import { chunkEvenly } from "../../shared/layout";
 import {
   asArray,
   friendlyNameFromEntity,
@@ -8,7 +9,7 @@ import {
   safeIcon,
 } from "../../shared/entities";
 import type { SwitchEntityConfig, SwitchState, SwitchTarget } from "../../shared/types";
-import { rowIsConfigured, rowRoster } from "./roster";
+import { isEmptyLightsConfig, rowIsConfigured, rowRoster, visibleLights } from "./roster";
 import {
   DEFAULT_LIGHT_STAGES,
   INTENSITY_NAMES,
@@ -80,7 +81,41 @@ export const intensityNames = (count: number): string[] => {
 
 export const intensityName = (stage: number, count: number): string => {
   const names = intensityNames(count);
-  return names[clamp(stage, 1, names.length) - 1] ?? names[0] ?? "Min";
+  return names[clamp(Math.round(finiteOr(stage, 1)), 1, names.length) - 1] ?? names[0] ?? "Min";
+};
+
+export const parseRgbPercent = (value: unknown): number | undefined => {
+  const percent = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(percent)) {
+    return undefined;
+  }
+  return clamp(Math.round(percent), 1, 100);
+};
+
+export const displayRgbPercent = (brightness: number, dragPercent?: number): number =>
+  parseRgbPercent(dragPercent) ?? brightnessToPercent(brightness);
+
+export const lightsHeaderValue = (
+  active: LightRowId | undefined,
+  stage?: number,
+  count?: number,
+): string | undefined => {
+  if (active === "rgb") {
+    return undefined;
+  }
+  if (active === "warm" || active === "white") {
+    return intensityName(stage ?? 1, count ?? DEFAULT_LIGHT_STAGES);
+  }
+  return undefined;
+};
+
+export const lightsLayoutRows = (config?: StagedLightsCardConfig): number => {
+  if (isEmptyLightsConfig(config)) {
+    return 4;
+  }
+  const rgbExtra = rowRoster(config, "rgb").length ? 1 : 0;
+  const chipRows = config?.show_switches ? chunkEvenly(visibleLights(config)).length : 0;
+  return 2 + configuredRows(config).length + rgbExtra + chipRows;
 };
 
 export const stageToBrightness = (stage: number, count: number): number => {

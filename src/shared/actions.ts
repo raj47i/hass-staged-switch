@@ -78,15 +78,16 @@ export const applyLightLooks = async (
   },
   enabled = true,
 ): Promise<void> => {
-  if (!hass || !enabled || !entityIds.length) {
+  const ids = entityIds.filter(isValidEntityId);
+  if (!hass || !enabled || !ids.length) {
     return;
   }
   if (!look.on || look.brightness <= 0) {
-    await hass.callService("light", "turn_off", { entity_id: entityIds });
+    await hass.callService("light", "turn_off", { entity_id: ids });
     return;
   }
   await hass.callService("light", "turn_on", {
-    entity_id: entityIds,
+    entity_id: ids,
     brightness: look.brightness,
     ...(look.rgb ? { rgb_color: look.rgb } : {}),
   });

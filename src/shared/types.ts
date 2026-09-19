@@ -64,7 +64,12 @@ export interface LovelaceCard extends HTMLElement {
   hass?: HomeAssistant;
   setConfig(config: LovelaceCardConfig): void;
   getCardSize?(): number | Promise<number>;
-  getGridOptions?(): { columns?: number; min_rows?: number };
+  getGridOptions?(): {
+    columns?: number;
+    min_columns?: number;
+    max_columns?: number;
+    min_rows?: number;
+  };
 }
 
 export interface LovelaceCardEditor extends HTMLElement {

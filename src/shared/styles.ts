@@ -3,10 +3,23 @@ import { css } from "lit";
 export const sharedCardChrome = css`
   :host {
     display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
   }
 
   ha-card {
     overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     background: var(--ha-card-background, var(--card-background-color, #fff));
   }
 
