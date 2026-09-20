@@ -11,12 +11,33 @@ import {
   fireConfigChanged,
   pickedValue,
 } from "./editor";
-import { asArray, isRosterEntity, isRgbCapableLight, isToggleEntity, safeIcon } from "./entities";
 import {
+  hiddenEntityIds,
+  overlayHiddenEntities,
+  pruneHiddenEntities,
+  showsEntityButtons,
+  toggleHiddenEntity,
+} from "./entity-buttons";
+import {
+  asArray,
+  entityDisplayName,
+  friendlyNameFromEntity,
+  generatedEntityLabel,
+  isGeneratedEntityLabel,
+  isRosterEntity,
+  isRgbCapableLight,
+  isToggleEntity,
+  safeIcon,
+  uniqueEntityIds,
+} from "./entities";
+import {
+  callHassService,
   errorMessage,
   fireEvent,
+  friendlyActionError,
   isInEditorPreview,
   relevantHassChanged,
+  withTimeout,
 } from "./hass";
 import {
   cardStorageKey,
@@ -37,6 +58,75 @@ const hassStub = (
   callService: async () => undefined,
   states: {},
   ...patch,
+});
+
+describe("entity display names", () => {
+  it("pretty-prints an entity id when Home Assistant has no name", () => {
+    expect(friendlyNameFromEntity("switch.hall_4x_2_switch_2")).toBe(
+      "Hall 4x 2 Switch 2",
+    );
+    expect(entityDisplayName(undefined, "switch.hall_4x_2_switch_2")).toBe(
+      "Hall 4x 2 Switch 2",
+    );
+  });
+
+  it("prefers a renamed registry name over a stale friendly_name", () => {
+    const hass = hassStub({
+      states: {
+        "switch.hall_4x_2_switch_2": {
+          entity_id: "switch.hall_4x_2_switch_2",
+          state: "off",
+          attributes: { friendly_name: "Switch hall_4x_2_switch_2" },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+      entities: {
+        "switch.hall_4x_2_switch_2": {
+          entity_id: "switch.hall_4x_2_switch_2",
+          name: "Hall stair",
+        },
+      },
+    });
+    expect(entityDisplayName(hass, "switch.hall_4x_2_switch_2")).toBe("Hall stair");
+  });
+
+  it("does not use a device name when the entity already has a friendly_name", () => {
+    const hass = hassStub({
+      states: {
+        "switch.hall_4x_2_switch_2": {
+          entity_id: "switch.hall_4x_2_switch_2",
+          state: "off",
+          attributes: { friendly_name: "Hall stair" },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+      entities: {
+        "switch.hall_4x_2_switch_2": {
+          entity_id: "switch.hall_4x_2_switch_2",
+          device_id: "box",
+        },
+      },
+      devices: {
+        box: { id: "box", name: "Hall 4x", name_by_user: "Hall box" },
+      },
+    });
+    expect(entityDisplayName(hass, "switch.hall_4x_2_switch_2")).toBe("Hall stair");
+    expect(generatedEntityLabel("switch.hall_4x_2_switch_2")).toBe(
+      "Switch hall_4x_2_switch_2",
+    );
+    expect(
+      isGeneratedEntityLabel(
+        "Switch hall_4x_2_switch_2",
+        "switch.hall_4x_2_switch_2",
+        "Hall stair",
+      ),
+    ).toBe(true);
+    expect(
+      isGeneratedEntityLabel("Movie", "switch.hall_4x_2_switch_2", "Hall stair"),
+    ).toBe(false);
+  });
 });
 
 describe("SerialActionQueue", () => {
@@ -156,6 +246,33 @@ describe("applyToggleTargets", () => {
       },
     ]);
   });
+
+  it("keeps turning other lights off when one bluetooth light is unreachable", async () => {
+    const calls: Array<{ data?: unknown }> = [];
+    const hass = hassStub({
+      callService: async (_domain, _service, serviceData) => {
+        calls.push({ data: serviceData });
+        const ids = (serviceData as { entity_id?: string | string[] } | undefined)?.entity_id;
+        if (Array.isArray(ids) && ids.length > 1) {
+          throw new Error("Failed to connect after 9 attempt(s): connection slot");
+        }
+        if (ids === "light.ble") {
+          throw new Error("Failed to connect after 9 attempt(s): connection slot");
+        }
+      },
+    });
+    await expect(
+      applyToggleTargets(hass, [
+        { entity: "light.wifi", state: "off" },
+        { entity: "light.ble", state: "off" },
+      ]),
+    ).rejects.toThrow(/Failed to connect/);
+    expect(calls).toEqual([
+      { data: { entity_id: ["light.wifi", "light.ble"] } },
+      { data: { entity_id: "light.wifi" } },
+      { data: { entity_id: "light.ble" } },
+    ]);
+  });
 });
 
 describe("editor helpers", () => {
@@ -269,6 +386,81 @@ describe("hass helpers", () => {
       } as unknown as Node),
     ).toBe(false);
   });
+
+  it("maps bluetooth and nested HA errors to a short card message", async () => {
+    const ble =
+      "Failed to perform the action scene/turn_on. Nan [F3:16:21:BB:E1:25] (id=40:E5:AD:B7:8C:73) - F3:16:21:BB:E1:25: Failed to connect after 9 attempt(s): No backend with an available connection slot that can reach address F3:16:21:BB:E1:25 was found: unknown (never seen by any scanner); 1 scanner(s) registered, 1 scanning, 1 connectable: The proxy/adapter is out of connection slots or the device is no longer reachable; Add additional proxies (https://esphome.github.io/bluetooth-proxies/) near this device";
+    const friendly =
+      "Couldn't reach a device. Check power, range, or the Bluetooth proxy, then try again.";
+    expect(friendlyActionError(new Error(ble), "Failed to update lights")).toBe(
+      friendly,
+    );
+    expect(
+      friendlyActionError({ body: { message: ble } }, "Failed to update lights"),
+    ).toBe(friendly);
+    expect(friendlyActionError(new Error("Entity not found"), "fallback")).toBe(
+      "Entity not found",
+    );
+    expect(friendlyActionError({}, "Failed to update lights")).toBe(
+      "Failed to update lights",
+    );
+    const args: unknown[] = [];
+    const hass = hassStub({
+      callService: async (...rest) => {
+        args.push(rest);
+      },
+    });
+    await callHassService(
+      hass,
+      "scene",
+      "turn_on",
+      { entity_id: "scene.nan" },
+      { entity_id: "scene.nan" },
+    );
+    expect(args[0]).toEqual([
+      "scene",
+      "turn_on",
+      { entity_id: "scene.nan" },
+      { entity_id: "scene.nan" },
+      false,
+    ]);
+    expect(
+      friendlyActionError(new Error("Device connection timed out"), "fallback"),
+    ).toBe(
+      "Couldn't reach a device. Check power, range, or the Bluetooth proxy, then try again.",
+    );
+    const ws: unknown[] = [];
+    const wired = hassStub({
+      callService: async () => {
+        throw new Error("should use callWS");
+      },
+      callWS: async (msg) => {
+        ws.push(msg);
+      },
+    });
+    await callHassService(wired, "scene", "turn_on", { entity_id: "scene.nan" });
+    expect(ws[0]).toMatchObject({
+      type: "call_service",
+      domain: "scene",
+      service: "turn_on",
+    });
+  });
+
+  it("rejects hanging work when a timeout is reached", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = withTimeout(
+        new Promise<void>(() => undefined),
+        40,
+        "Device connection timed out",
+      );
+      const rejected = expect(pending).rejects.toThrow("Device connection timed out");
+      await vi.advanceTimersByTimeAsync(40);
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("isToggleEntity extras", () => {
@@ -336,6 +528,36 @@ describe("isToggleEntity extras", () => {
   });
 });
 
+describe("entity button config", () => {
+  it("keeps existing scene-set cards hidden until Show entity buttons is on", () => {
+    expect(showsEntityButtons({ studio: "guest" })).toBe(false);
+    expect(showsEntityButtons({ studio: "guest", show_switches: false })).toBe(false);
+    expect(showsEntityButtons({ studio: "guest", show_switches: true })).toBe(true);
+    expect(showsEntityButtons({ show_switches: true })).toBe(true);
+    expect(showsEntityButtons({ show_switches: false })).toBe(false);
+    expect(showsEntityButtons(undefined, true)).toBe(false);
+    expect(showsEntityButtons({}, true)).toBe(true);
+    expect(showsEntityButtons({ show_switches: false }, true)).toBe(false);
+  });
+
+  it("defaults every set entity to visible and prunes leftovers", () => {
+    expect(hiddenEntityIds({})).toEqual([]);
+    expect(hiddenEntityIds({ hidden_entities: ["light.a", "not-id", "light.a"] })).toEqual([
+      "light.a",
+    ]);
+    expect(pruneHiddenEntities(["light.gone", "light.keep"], ["light.keep", "light.new"])).toEqual([
+      "light.keep",
+    ]);
+    expect(toggleHiddenEntity([], "light.a", false, ["light.a", "light.b"])).toEqual(["light.a"]);
+    expect(toggleHiddenEntity(["light.a"], "light.a", true, ["light.a", "light.b"])).toBeUndefined();
+    expect(toggleHiddenEntity(["light.gone"], "light.gone", true, ["light.a"])).toBeUndefined();
+    expect(overlayHiddenEntities(["light.a", "light.b"], ["light.b"])).toEqual([
+      { entity: "light.a" },
+      { entity: "light.b", hide: true },
+    ]);
+  });
+});
+
 describe("asArray and safeIcon", () => {
   it("treats non-lists and blank icons as empty", () => {
     expect(asArray("light.a")).toEqual([]);
@@ -345,6 +567,10 @@ describe("asArray and safeIcon", () => {
     expect(safeIcon("   ")).toBe("");
     expect(safeIcon(12, "mdi:fallback")).toBe("mdi:fallback");
     expect(safeIcon(undefined, "mdi:fallback")).toBe("mdi:fallback");
+    expect(uniqueEntityIds(["light.a", "light.a", "", "not-id", undefined, "switch.b"])).toEqual([
+      "light.a",
+      "switch.b",
+    ]);
   });
 });
 

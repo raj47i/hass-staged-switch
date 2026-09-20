@@ -1,5 +1,6 @@
 export * from "./actions";
 export * from "./const";
+export * from "./entity-buttons";
 export * from "./editor";
 export * from "./entities";
 export * from "./hass";

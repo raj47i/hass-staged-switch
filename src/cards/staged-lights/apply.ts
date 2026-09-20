@@ -5,6 +5,8 @@ import {
   isValidEntityId,
 } from "../../shared";
 import type { HomeAssistant } from "../../shared/types";
+import { activateStudioScene, lightsStudioKind, peekStudioScenes, sceneIdForLightsState } from "../../studio/bind";
+import type { SceneConfig } from "../../studio/types";
 import { hexToRgb } from "./color";
 import { DEFAULT_RGB_HEX, ROW_ORDER } from "./const";
 import { rowRoster } from "./roster";
@@ -56,27 +58,63 @@ export const applyLightsMode = async (
   hass?: HomeAssistant,
   config?: StagedLightsCardConfig,
   state?: LightsCardState,
+  options?: { scenes?: SceneConfig[]; liveRgb?: boolean },
 ): Promise<void> => {
   if (!hass || !state) {
     return;
   }
-  const ids = {
-    rgb: rowEntityIds(config, "rgb"),
-    warm: rowEntityIds(config, "warm"),
-    white: rowEntityIds(config, "white"),
+  if (config?.studio && !options?.liveRgb) {
+    const scenes = options?.scenes ?? peekStudioScenes(hass);
+    const id = sceneIdForLightsState(
+      config.studio,
+      state,
+      lightsStudioKind(config.studio, scenes),
+    );
+    if (await activateStudioScene(hass, id)) {
+      return;
+    }
+  }
+  const applyEntities = async (): Promise<void> => {
+    const ids = {
+      rgb: rowEntityIds(config, "rgb"),
+      warm: rowEntityIds(config, "warm"),
+      white: rowEntityIds(config, "white"),
+    };
+    const off = ROW_ORDER.flatMap((row) => (state[row]?.on ? [] : ids[row]));
+    await turnOff(hass, [...new Set(off)]);
+    const active = activeLightRow(state);
+    if (active === "rgb") {
+      await applyLightLooks(hass, ids.rgb, {
+        on: true,
+        brightness: clamp(Number(state.rgb?.brightness) || 1, 1, 255),
+        rgb: hexToRgb(state.rgb?.hex || DEFAULT_RGB_HEX),
+      });
+      return;
+    }
+    if (active === "warm" || active === "white") {
+      await turnOnStageRow(hass, config, active, state);
+    }
   };
-  const off = ROW_ORDER.flatMap((row) => (state[row]?.on ? [] : ids[row]));
-  await turnOff(hass, [...new Set(off)]);
-  const active = activeLightRow(state);
-  if (active === "rgb") {
-    await applyLightLooks(hass, ids.rgb, {
-      on: true,
-      brightness: clamp(Number(state.rgb?.brightness) || 1, 1, 255),
-      rgb: hexToRgb(state.rgb?.hex || DEFAULT_RGB_HEX),
-    });
-    return;
+
+  if (config?.studio && !options?.liveRgb) {
+    const scenes = options?.scenes ?? peekStudioScenes(hass);
+    const id = sceneIdForLightsState(
+      config.studio,
+      state,
+      lightsStudioKind(config.studio, scenes),
+    );
+    try {
+      if (await activateStudioScene(hass, id)) {
+        return;
+      }
+    } catch (error) {
+      try {
+        await applyEntities();
+      } catch {
+        // Keep the original scene error for the card.
+      }
+      throw error;
+    }
   }
-  if (active === "warm" || active === "white") {
-    await turnOnStageRow(hass, config, active, state);
-  }
+  await applyEntities();
 };

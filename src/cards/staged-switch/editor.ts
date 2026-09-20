@@ -14,6 +14,13 @@ import {
   pickedValue,
 } from "../../shared";
 import type { HomeAssistant, SwitchEntityConfig, SwitchState } from "../../shared/types";
+import { peekStudioScenes, refreshStudioScenes, studioSetOptions } from "../../studio/bind";
+import {
+  hiddenEntityIds,
+  renderEntityButtonsEditor,
+  studioSetEntityIds,
+  toggleHiddenEntity,
+} from "../../studio/entity-buttons";
 import { CARD_NAME, EDITOR_SELECT_EVENT, MAX_RESOLVED_STAGES, MAX_STAGES } from "./const";
 import { resolveStages } from "./stages";
 import { editorStyles } from "./styles";
@@ -51,6 +58,27 @@ export class StagedSwitchCardEditor extends LitElement {
   public connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener(EDITOR_SELECT_EVENT, this._onPreviewSelect);
+    void refreshStudioScenes(this.hass).then(() => this.requestUpdate());
+  }
+
+  private _studioChanged(ev: Event): void {
+    const slug = pickedValue(ev);
+    if (!this._config) {
+      return;
+    }
+    if (!slug) {
+      this._config = { ...this._config, studio: undefined };
+      fireConfigChanged(this, this._config);
+      return;
+    }
+    this._config = {
+      type: this._config.type,
+      studio: slug,
+      title: this._config.title,
+      show_switches: this._config.show_switches,
+      show_stage_labels: this._config.show_stage_labels,
+    };
+    fireConfigChanged(this, this._config);
   }
 
   public disconnectedCallback(): void {
@@ -392,7 +420,31 @@ export class StagedSwitchCardEditor extends LitElement {
 
   private _renderSharedFields() {
     const config = this._config!;
+    const sets = studioSetOptions(this.hass, ["switch", "advanced"]);
     return html`
+      <label class="row">
+        <span class="label">Scene Studio set</span>
+        <select
+          class="text-input"
+          .value=${config.studio ?? ""}
+          @change=${this._studioChanged}
+        >
+          <option value="">Configure this card manually</option>
+          ${sets.map(
+            (set) => html`<option value=${set.slug}>${set.name}</option>`,
+          )}
+        </select>
+      </label>
+      ${config.studio
+        ? html`
+            <span class="help">
+              Stages come from the
+              ${sets.find((set) => set.slug === config.studio)?.name ?? config.studio}
+              scene set. Edit it in Scene Studio.
+            </span>
+          `
+        : nothing}
+
       <ha-textfield
         label="Title"
         .value=${config.title ?? ""}
@@ -400,6 +452,9 @@ export class StagedSwitchCardEditor extends LitElement {
         @input=${this._titleChanged}
       ></ha-textfield>
 
+      ${config.studio
+        ? nothing
+        : html`
       <ha-entity-picker
         .hass=${this.hass}
         .value=${config.entity ?? ""}
@@ -430,14 +485,38 @@ export class StagedSwitchCardEditor extends LitElement {
           @change=${this._directControlChanged}
         />
       </div>
-      <div class="inline">
-        <span class="label">Show entity buttons</span>
-        <input
-          type="checkbox"
-          .checked=${config.show_switches !== false}
-          @change=${this._showSwitchesChanged}
-        />
-      </div>
+      `}
+      ${config.studio
+        ? renderEntityButtonsEditor({
+            hass: this.hass,
+            enabled: config.show_switches === true,
+            entities: studioSetEntityIds(config.studio, peekStudioScenes(this.hass)),
+            hidden: hiddenEntityIds(config),
+            onEnabled: (enabled) =>
+              this._updateConfig({
+                show_switches: enabled || undefined,
+                hidden_entities: enabled ? config.hidden_entities : undefined,
+              }),
+            onVisible: (entityId, visible) =>
+              this._updateConfig({
+                hidden_entities: toggleHiddenEntity(
+                  config.hidden_entities ?? [],
+                  entityId,
+                  visible,
+                  studioSetEntityIds(config.studio, peekStudioScenes(this.hass)),
+                ),
+              }),
+          })
+        : html`
+            <div class="inline">
+              <span class="label">Show entity buttons</span>
+              <input
+                type="checkbox"
+                .checked=${config.show_switches !== false}
+                @change=${this._showSwitchesChanged}
+              />
+            </div>
+          `}
       <div class="inline">
         <span class="label">Show stage labels</span>
         <input
@@ -684,6 +763,9 @@ export class StagedSwitchCardEditor extends LitElement {
       <div class="form">
         ${this._renderSharedFields()}
 
+        ${this._config.studio
+          ? nothing
+          : html`
         <div class="steps">
           <button
             type="button"
@@ -708,6 +790,7 @@ export class StagedSwitchCardEditor extends LitElement {
         ${this._page === "entities"
           ? this._renderEntitiesPage()
           : this._renderStagesPage()}
+        `}
       </div>
     `;
   }

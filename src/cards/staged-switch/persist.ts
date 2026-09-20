@@ -9,7 +9,7 @@ import { CARD_NAME } from "./const";
 import type { StagedSwitchCardConfig } from "./types";
 
 export const cardStorageKey = (config?: StagedSwitchCardConfig): string =>
-  scopedStorageKey(CARD_NAME, config?.entity || config?.title);
+  scopedStorageKey(CARD_NAME, config?.studio || config?.entity || config?.title);
 
 export const readStoredPower = (key: string): boolean | undefined =>
   readStoredOnOff(key, "power");

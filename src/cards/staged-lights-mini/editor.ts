@@ -10,13 +10,11 @@ export class StagedLightsMiniCardEditor extends StagedLightsCardEditor {
     if (!isLightsCardConfig(config)) {
       return;
     }
-    const rest = { ...config };
-    delete rest.show_switches;
-    super.setConfig(rest);
+    super.setConfig(config);
   }
 
   protected get _entityButtonsEnabled(): boolean {
-    return false;
+    return Boolean(this._config?.studio);
   }
 }
 

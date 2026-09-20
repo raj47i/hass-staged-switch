@@ -13,6 +13,8 @@ export interface StageConfig {
 
 export interface StagedSwitchCardConfig extends LovelaceCardConfig {
   type: string;
+  /** Scene Studio set slug. Stages are read from those scenes. */
+  studio?: string;
   title?: string;
   entity?: string;
   power_entity?: string;
@@ -21,6 +23,8 @@ export interface StagedSwitchCardConfig extends LovelaceCardConfig {
   stage_names?: string[];
   direct_control?: boolean;
   show_switches?: boolean;
+  /** Scene-set entities hidden from the chip row. Missing = all shown once `show_switches` is on. */
+  hidden_entities?: string[];
   show_stage_labels?: boolean;
 }
 

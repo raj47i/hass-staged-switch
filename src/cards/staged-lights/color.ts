@@ -24,9 +24,16 @@ export const hexToRgb = (hex: string): [number, number, number] => {
   ];
 };
 
-export const rgbToHex = (rgb: [number, number, number]): string =>
-  `#${rgb
-    .map((channel) => clamp(Math.round(channel), 0, 255).toString(16).padStart(2, "0"))
+export const rgbToHex = (rgb: [number, number, number] | number[]): string =>
+  `#${[0, 1, 2]
+    .map((index) => {
+      const channel = Number(rgb[index]);
+      return clamp(
+        Number.isFinite(channel) ? Math.round(channel) : 0,
+        0,
+        255,
+      ).toString(16).padStart(2, "0");
+    })
     .join("")}`;
 
 export const hueToHex = (hue: number): string => {

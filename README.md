@@ -13,7 +13,7 @@ Use it when one control should represent a sequence, for example:
 - Fan low / medium / high using three switches
 - Irrigation zones that come on one after another
 
-The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It currently ships three cards: **Staged Switch Card**, **Staged Lights Card**, and **Staged Lights Mini Card**.
+The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It ships **Scene Studio Card**, **Staged Switch Card**, **Staged Lights Card**, and **Staged Lights Mini Card**.
 
 ## How to use it
 
@@ -40,6 +40,24 @@ HACS downloads `staged-switch-card.js` from the GitHub release.
    - Type: **JavaScript Module**
 
 While testing from this repo, use `npm run deploy` and point the resource at `/local/staged-switch-loader.js` instead. That loader reads a version stamp so you only need a browser refresh after each deploy, not a new resource URL.
+
+### Scene Studio
+
+This is a **frontend module**, not a Home Assistant add-on. After the JavaScript resource is loaded, Scene Studio appears as a dashboard under **Settings → Dashboards**. From there you can turn **Show in sidebar** on or off. The same checkbox is on the Scene Studio home page.
+
+Open Scene Studio from the sidebar or Settings → Dashboards to create a **scene set** — a bundle of exclusive Home Assistant scenes. Pick a **Simple light scene set**, **Minimal light scene set**, **Advanced light scene set**, or **Switch scene set**. That page is the editor.
+
+On a room dashboard, add **Scene Studio Card** and pick a scene set such as Guest Room lights. The card heading is that scene set’s name. Light scene sets become the mini lights card (RGB / Warm / White). Switch and advanced scene sets become the switch card. You can also add **Staged Lights Mini Card**, **Staged Lights Card**, or **Staged Switch Card** and pick the same scene set. The card fills itself from those scenes — no helpers or entity lists. Taps call `scene.turn_on`. RGB color and brightness still change live, like the original cards.
+
+**Show entity buttons** is off on existing scene-set cards (the option was not stored before). Turn it on in the card editor to show every entity in the scene set under the controls — including entities that are not in a group. Those names start checked; uncheck one to hide its button. New entities added to the set later stay checked. The buttons wrap in even rows, same as the original staged cards.
+
+```yaml
+type: custom:scene-studio-card
+studio: guest_room
+show_switches: true
+hidden_entities:
+  - light.guest_spare
+```
 
 ```yaml
 resources:
@@ -288,8 +306,10 @@ YAML is still available from **Show code editor**.
 | `switches` | list | no | | Entities to combine in order. Stage `0` is all off; stage _n_ turns on the first _n_ items, up to 5 stages |
 | `stages` | list | no | | Explicit per-stage on/off map. Overrides `switches` for the stage map when present |
 | `stage_names` | list | no | | Labels for each stage combination (index `0` is Off) |
+| `studio` | string | no | | Scene Studio set slug. Stages come from that scene set |
 | `direct_control` | boolean | no | `true` | `true`: card turns entities on/off. `false`: only updates the helpers |
-| `show_switches` | boolean | no | `true` | Show a chip for each visible entity |
+| `show_switches` | boolean | no | `true` | Show a chip for each visible entity. Scene-set cards default this to off |
+| `hidden_entities` | list | no | | Entity ids hidden from the chip row when `show_switches` is on |
 | `show_stage_labels` | boolean | no | `true` | Show the muted stage names under the buttons |
 
 Provide at least one of `entity`, `switches`, or `stages`.
@@ -386,6 +406,7 @@ RGB, Warm, and White always turn their lights on and off. **Show entity buttons*
 | Option | Type | Required | Description |
 | --- | --- | --- | --- |
 | `type` | string | yes | `custom:staged-lights-card` |
+| `studio` | string | no | Scene Studio set slug. Rows and stages come from that scene set |
 | `entity` | string | recommended | `input_text` that stores the JSON state |
 | `stages` | number | no | Fallback stage count when a row has no map yet. Still clamped per row: 2 lights → max 3, 3+ lights → max 5 |
 | `rgb` | list | no | RGB-capable lights for the color row |
@@ -398,12 +419,13 @@ RGB, Warm, and White always turn their lights on and off. **Show entity buttons*
 | `warm_icons` | map | no | `{ on, off }` icons for the Warm power button |
 | `white_icons` | map | no | `{ on, off }` icons for the White power button |
 | `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom. Those buttons always toggle the entity |
+| `hidden_entities` | list | no | Entity ids hidden from the chip row when `show_switches` is on |
 
 RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
 
 ## Staged Lights Mini Card
 
-The same RGB / Warm / White lighting, in two rows. There is no entity-chip option.
+The same RGB / Warm / White lighting, in two rows. On a scene-set card you can turn on **Show entity buttons**; a manual mini card still has no chip option.
 
 1. **Mode group** — RGB, Warm, and White (only the rows you configured). Tapping the active mode turns it off; tapping it again, or another mode, turns that one on. The last mode is stored in the helper, so row 2 reloads from it.
 2. **Controls** — RGB shows brightness, presets, and the color picker. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
@@ -424,7 +446,7 @@ white:
   - light.desk
 ```
 
-The editor is the same multipage RGB / Warm / White setup as Staged Lights, without **Show entity buttons**. Options match the full lights card except `show_switches`, which this card ignores.
+The editor is the same multipage RGB / Warm / White setup as Staged Lights. On a scene-set card, **Show entity buttons** is available and off unless you turn it on. Manual mini cards still hide that option.
 
 ## Development
 
@@ -433,10 +455,11 @@ npm install
 npm test
 npm run build
 npm run watch
+npm run preview
 npm run deploy
 ```
 
-`npm test` runs the unit tests. `npm run watch` rebuilds `dist/staged-switch-card.js` as you edit. Open `preview.html` for a dashboard-style preview (screenshot plus live cards). `npm run deploy` copies the bundle to Home Assistant at `ha:/config/www/`.
+`npm test` runs the unit tests. `npm run watch` rebuilds `dist/staged-switch-card.js` as you edit. `npm run preview` serves this folder at [http://localhost:4173](http://localhost:4173). Open `preview.html` for the dashboard cards, or `studio.html` for **Scene Studio** (scenes are mocked in the browser). `npm run deploy` copies the bundle to Home Assistant at `ha:/config/www/`. After a refresh, Scene Studio is created under **Settings → Dashboards** and can be shown in the sidebar.
 
 Layout:
 
@@ -444,6 +467,7 @@ Layout:
 - `src/cards/staged-switch/` — staged switch card
 - `src/cards/staged-lights/` — staged lights card
 - `src/cards/staged-lights-mini/` — compact two-row lights card
+- `src/studio/` — Scene Studio: create and edit scene sets (simple, minimal, advanced, switch)
 - `src/index.ts` — bundle entry; import another card module here to add it
 
 Requirements: Node.js 20 or newer.
@@ -453,7 +477,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.6-beta`.
+2. Commit and tag, for example `v0.0.7-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
 
 ## License

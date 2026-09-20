@@ -8,7 +8,7 @@ import {
   entityDisplayName,
   entityIcon,
   entityStateLabel,
-  errorMessage,
+  friendlyActionError,
   fireEvent,
   isInEditorPreview,
   isValidEntityId,
@@ -43,6 +43,14 @@ import {
   writeStoredStage,
 } from "./persist";
 import {
+  activateStudioScene,
+  hydrateStudioCard,
+  mergeSwitchStudioConfig,
+  peekStudioScenes,
+  sceneIdForSwitchIndex,
+} from "../../studio/bind";
+import { showsEntityButtons } from "../../shared/entity-buttons";
+import {
   allOffTargets,
   cardEntities,
   extraStagesHidden,
@@ -67,7 +75,10 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   @state() private _localEntities: Record<string, "on" | "off"> = {};
   @state() private _pending = false;
   @state() private _error?: string;
+  @state() private _studioTick = 0;
   private _cachedStages: ResolvedStage[] = [];
+  private _studioSlug?: string;
+  private _studioCacheVersion = 0;
   private _queue = new SerialActionQueue<
     | { kind: "stage"; index: number }
     | { kind: "power"; on: boolean }
@@ -99,11 +110,21 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     this._localEntities = {};
     this._queue.clear();
     this._cachedStages = [];
+    this._studioSlug = undefined;
+    this._studioCacheVersion = 0;
+    this._pending = false;
     this._error = undefined;
   }
 
+  private get _resolved(): StagedSwitchCardConfig | undefined {
+    if (!this._config) {
+      return undefined;
+    }
+    return mergeSwitchStudioConfig(this._config, peekStudioScenes(this.hass));
+  }
+
   public getCardSize(): number {
-    if (isEmptyStagedSwitchConfig(this._config)) {
+    if (isEmptyStagedSwitchConfig(this._resolved)) {
       return 4;
     }
     return 2 + this._entityButtonRows;
@@ -114,19 +135,19 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       columns: 12,
       min_columns: 6,
       max_columns: 12,
-      min_rows: isEmptyStagedSwitchConfig(this._config)
+      min_rows: isEmptyStagedSwitchConfig(this._resolved)
         ? 4
         : 2 + this._entityButtonRows,
     };
   }
 
   private get _visibleEntities() {
-    if (!this._config || this._config.show_switches === false) {
+    if (!showsEntityButtons(this._resolved, true)) {
       return [];
     }
     return visibleCardEntities(
-      this._config,
-      uniqueEntities(resolveStages(this._config, this._sliderEntity)),
+      this._resolved,
+      cardEntities(this._resolved, this._stages),
     );
   }
 
@@ -139,17 +160,17 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   private get _sliderEntity() {
-    const entityId = this._config?.entity;
+    const entityId = this._resolved?.entity;
     return entityId ? this.hass?.states[entityId] : undefined;
   }
 
   private get _powerEntity() {
-    const entityId = this._config?.power_entity;
+    const entityId = this._resolved?.power_entity;
     return entityId ? this.hass?.states[entityId] : undefined;
   }
 
   private get _storageKey() {
-    return cardStorageKey(this._config);
+    return cardStorageKey(this._resolved);
   }
 
   private get _sliderMin(): number {
@@ -186,7 +207,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     if (this._powerEntity) {
       return this._powerEntity.state === "on";
     }
-    if (this._config?.power_entity) {
+    if (this._resolved?.power_entity) {
       return undefined;
     }
     return readStoredPower(this._storageKey);
@@ -197,13 +218,13 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   private get _displayValue(): number {
-    return this._config?.entity
+    return this._resolved?.entity
       ? this._sliderMin + this._currentIndex
       : this._currentIndex;
   }
 
   private get _displayMax(): number {
-    return this._config?.entity
+    return this._resolved?.entity
       ? this._sliderMin + this._maxIndex
       : this._maxIndex;
   }
@@ -215,7 +236,8 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       changed.has("_localPower") ||
       changed.has("_localEntities") ||
       changed.has("_pending") ||
-      changed.has("_error")
+      changed.has("_error") ||
+      changed.has("_studioTick")
     ) {
       return true;
     }
@@ -223,21 +245,42 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       return relevantHassChanged(
         changed.get("hass") as HomeAssistant | undefined,
         this.hass,
-        relevantEntityIds(this._config),
+        relevantEntityIds(this._resolved),
       );
     }
     return true;
   }
 
   protected willUpdate(changed: PropertyValues): void {
-    if (changed.has("_config") || changed.has("hass")) {
-      this._cachedStages = this._config
-        ? resolveStages(this._config, this._sliderEntity)
+    if (changed.has("_config") || changed.has("hass") || changed.has("_studioTick")) {
+      this._cachedStages = this._resolved
+        ? resolveStages(this._resolved, this._sliderEntity)
         : [];
     }
   }
 
+  public connectedCallback(): void {
+    super.connectedCallback();
+    void this._loadStudio();
+  }
+
+  private async _loadStudio(): Promise<void> {
+    const next = await hydrateStudioCard(this.hass, this._config?.studio, {
+      slug: this._studioSlug,
+      version: this._studioCacheVersion,
+    });
+    if (!next?.changed) {
+      return;
+    }
+    this._studioSlug = next.slug;
+    this._studioCacheVersion = next.version;
+    this._studioTick += 1;
+  }
+
   protected updated(changed: PropertyValues): void {
+    if (changed.has("hass") || changed.has("_config")) {
+      void this._loadStudio();
+    }
     if (!changed.has("hass")) {
       return;
     }
@@ -396,7 +439,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
   }
 
   private get _cardEntities(): SwitchTarget[] {
-    return cardEntities(this._config, this._stages);
+    return cardEntities(this._resolved, this._stages);
   }
 
   private get _rememberedStageIndex(): number {
@@ -490,7 +533,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
         await this._syncProgressFromEntities();
       }
     } catch (error) {
-      this._error = errorMessage(error, "Failed to toggle switch");
+      this._error = friendlyActionError(error, "Failed to toggle switch");
     } finally {
       this._pending = false;
     }
@@ -525,9 +568,22 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       this._setLocalEntitiesFromTargets(targets);
       await this._writePower(true);
       await this._writeStage(stageIndex);
+      if (this._resolved?.studio) {
+        const usedScene = await activateStudioScene(
+          this.hass,
+          sceneIdForSwitchIndex(
+            this._resolved.studio,
+            stageIndex,
+            peekStudioScenes(this.hass),
+          ),
+        );
+        if (usedScene) {
+          return;
+        }
+      }
       await this._applyTargets(targets);
     } catch (error) {
-      this._error = errorMessage(error, "Failed to apply stage");
+      this._error = friendlyActionError(error, "Failed to apply stage");
     } finally {
       this._pending = false;
     }
@@ -554,15 +610,28 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       const stageIndex = this._rememberedStageIndex;
       const targets = on
         ? this._targetsForStage(this._stages[stageIndex])
-        : allOffTargets(this._stages, this._config);
+        : allOffTargets(this._stages, this._resolved);
       this._setLocalEntitiesFromTargets(targets);
       await this._writePower(on);
       if (on && stageIndex > 0 && this._currentIndex === 0) {
         await this._writeStage(stageIndex);
       }
+      if (this._resolved?.studio) {
+        const usedScene = await activateStudioScene(
+          this.hass,
+          sceneIdForSwitchIndex(
+            this._resolved.studio,
+            on ? stageIndex : 0,
+            peekStudioScenes(this.hass),
+          ),
+        );
+        if (usedScene) {
+          return;
+        }
+      }
       await this._applyTargets(targets);
     } catch (error) {
-      this._error = errorMessage(error, "Failed to toggle power");
+      this._error = friendlyActionError(error, "Failed to toggle power");
     } finally {
       this._pending = false;
     }
@@ -578,7 +647,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     if (!this._config) {
       return html`<ha-card><div class="warning">Invalid configuration</div></ha-card>`;
     }
-    if (isEmptyStagedSwitchConfig(this._config)) {
+    if (isEmptyStagedSwitchConfig(this._resolved)) {
       return this._renderShowcase();
     }
     if (!this.hass) {
@@ -752,13 +821,13 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       return warning;
     }
 
-    const config = this._config!;
+    const config = this._resolved ?? this._config!;
     const stages = this._stages;
     const current = this._currentStage;
-    const visibleRows = chunkEvenly(visibleCardEntities(config, uniqueEntities(stages)));
+    const visibleRows = chunkEvenly(this._visibleEntities);
     const stageButtons = this._stageButtons;
     const showLabels = config.show_stage_labels !== false;
-    const showSwitches = config.show_switches !== false;
+    const showSwitches = visibleRows.length > 0;
     const wrongDomain =
       config.entity && domainOf(config.entity) !== "input_number";
 
@@ -781,7 +850,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
             </div>`
           : nothing}
 
-        ${this._error ? html`<div class="warning">${this._error}</div>` : nothing}
+        ${this._error ? html`<div class="warning" role="alert">${this._error}</div>` : nothing}
 
         ${config.power_entity && !this._powerEntity
           ? html`<div class="notice">

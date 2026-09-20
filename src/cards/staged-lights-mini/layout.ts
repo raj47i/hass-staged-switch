@@ -1,9 +1,16 @@
+import { chunkEvenly } from "../../shared/layout";
+import { showsEntityButtons } from "../../shared/entity-buttons";
+import { visibleLights } from "../staged-lights/roster";
 import { configuredRows } from "../staged-lights/stages";
 import { activeLightRow, lastLightRow } from "../staged-lights/state";
 import type { LightRowId, LightsCardState, StagedLightsCardConfig } from "../staged-lights/types";
 import { ROW_META, ROW_ORDER } from "../staged-lights/const";
 
 export const MINI_LAYOUT_ROWS = 2;
+
+export const miniLayoutRows = (config?: StagedLightsCardConfig): number =>
+  MINI_LAYOUT_ROWS +
+  (showsEntityButtons(config) ? chunkEvenly(visibleLights(config)).length : 0);
 
 export const configuredMiniRow = (
   config?: StagedLightsCardConfig,

@@ -1,14 +1,16 @@
 {
   "name": "staged-switch-card",
-  "version": "0.0.6-beta",
-  "description": "Home Assistant Lovelace cards for grouped switch, light, and fan control",
+  "version": "0.0.7-beta",
+  "description": "Home Assistant Lovelace cards for staged switch and light control, plus Scene Studio scene sets",
   "keywords": [
     "home-assistant",
     "homeassistant",
     "hass",
     "lovelace",
     "custom-card",
-    "hacs"
+    "hacs",
+    "scenes",
+    "scene-studio"
   ],
   "author": "raj47i",
   "license": "GPL-3.0-or-later",
@@ -26,6 +28,7 @@
     "build": "rollup -c",
     "watch": "rollup -c --watch",
     "test": "vitest run",
+    "preview": "npx --yes serve -l 4173 .",
     "deploy": "sh scripts/deploy.sh"
   },
   "dependencies": {

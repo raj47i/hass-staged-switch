@@ -20,6 +20,8 @@ export interface HassEntity {
 
 export interface EntityRegistryEntry {
   entity_id: string;
+  name?: string | null;
+  original_name?: string | null;
   device_id?: string | null;
   area_id?: string | null;
   hidden?: boolean;
@@ -50,7 +52,16 @@ export interface HomeAssistant {
     service: string,
     serviceData?: Record<string, unknown>,
     target?: { entity_id?: string | string[] },
+    notifyOnError?: boolean,
+    returnResponse?: boolean,
   ): Promise<unknown>;
+  callApi?<T>(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    data?: unknown,
+  ): Promise<T>;
+  callWS?<T>(msg: Record<string, unknown>): Promise<T>;
+  user?: { id?: string; is_admin?: boolean; name?: string };
   localize: (key: string, ...args: unknown[]) => string;
   language: string;
 }

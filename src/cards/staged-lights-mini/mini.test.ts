@@ -6,6 +6,7 @@ import { CARD_NAME } from "./const";
 import {
   MINI_LAYOUT_ROWS,
   configuredMiniRow,
+  miniLayoutRows,
   miniActiveRow,
   miniControlRow,
   miniModeMeta,
@@ -17,6 +18,15 @@ import {
 describe("mini lights layout", () => {
   it("always uses two rows and only the configured RGB, Warm, and White modes", () => {
     expect(MINI_LAYOUT_ROWS).toBe(2);
+    expect(miniLayoutRows({ type: `custom:${CARD_NAME}` })).toBe(2);
+    expect(
+      miniLayoutRows({
+        type: `custom:${CARD_NAME}`,
+        studio: "guest",
+        show_switches: true,
+        switches: ["light.a", "light.b", "light.c"],
+      }),
+    ).toBe(3);
     expect(miniModes(undefined)).toEqual([]);
     expect(miniModes(null as never)).toEqual([]);
     expect(

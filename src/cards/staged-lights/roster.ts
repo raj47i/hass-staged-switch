@@ -2,6 +2,7 @@ import {
   asArray,
   isValidEntityId,
   normalizeSwitch,
+  uniqueEntityIds,
   visibleCardEntities,
 } from "../../shared/entities";
 import type { SwitchEntityConfig, SwitchTarget } from "../../shared/types";
@@ -42,6 +43,9 @@ export const rowIsConfigured = (
   row: LightRowId,
 ): boolean => {
   const count = rowRoster(config, row).length;
+  if (config?.studio) {
+    return count > 0;
+  }
   return row === "rgb" ? count > 0 : count >= MIN_WARM_WHITE_ENTITIES;
 };
 
@@ -52,27 +56,45 @@ export const configuredRosterItems = (
   config?: StagedLightsCardConfig,
 ): SwitchEntityConfig[] => uniqueRosterItems(config, (row) => rowIsConfigured(config, row));
 
+const asTargets = (items: SwitchEntityConfig[]): SwitchTarget[] =>
+  items.map((item) => ({
+    entity: item.entity,
+    name: item.name,
+    icon: item.icon,
+    state: "off" as const,
+  }));
+
 export const visibleLights = (config?: StagedLightsCardConfig): SwitchTarget[] => {
+  if (config?.studio) {
+    const items = asArray<string | SwitchEntityConfig>(config.switches)
+      .map(normalizeSwitch)
+      .filter((item) => isValidEntityId(item.entity));
+    return visibleCardEntities({ switches: items }, asTargets(items));
+  }
   const items = configuredRosterItems(config);
-  return visibleCardEntities(
-    { switches: items },
-    items.map((item) => ({
-      entity: item.entity,
-      name: item.name,
-      icon: item.icon,
-      state: "off" as const,
-    })),
-  );
+  return visibleCardEntities({ switches: items }, asTargets(items));
 };
 
 export const allLightIds = (config?: StagedLightsCardConfig): string[] =>
-  allRosterItems(config).map((item) => item.entity);
+  uniqueEntityIds([
+    ...allRosterItems(config).map((item) => item.entity),
+    ...asArray<string | SwitchEntityConfig>(config?.switches).map((item) =>
+      typeof item === "string" ? item : item?.entity,
+    ),
+  ]);
 
 export const isLightsCardConfig = (config: unknown): config is StagedLightsCardConfig =>
   typeof config === "object" && config !== null && !Array.isArray(config);
 
-export const isEmptyLightsConfig = (config?: StagedLightsCardConfig): boolean =>
-  !config || !ROW_ORDER.some((row) => rowIsConfigured(config, row));
+export const isEmptyLightsConfig = (config?: StagedLightsCardConfig): boolean => {
+  if (!config) {
+    return true;
+  }
+  if (config.studio) {
+    return false;
+  }
+  return !ROW_ORDER.some((row) => rowIsConfigured(config, row));
+};
 
 export const relevantLightEntityIds = (config?: StagedLightsCardConfig): string[] => {
   if (!config) {

@@ -31,6 +31,8 @@ export const sharedCardChrome = css`
 
   .warning {
     color: var(--error-color, #db4437);
+    line-height: 1.4;
+    padding-bottom: 8px;
   }
 
   ha-card > .warning:first-child,
@@ -224,6 +226,7 @@ export const sharedEditorStyles = css`
   ha-device-picker,
   ha-icon-picker,
   ha-select,
+  select,
   .text-input {
     width: 100%;
   }

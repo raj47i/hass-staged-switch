@@ -8,7 +8,7 @@ import type { LightsCardState, StagedLightsCardConfig } from "./types";
 export const lightsStorageKey = (
   config?: StagedLightsCardConfig,
   cardName = CARD_NAME,
-): string => scopedStorageKey(cardName, config?.entity || config?.title);
+): string => scopedStorageKey(cardName, config?.studio || config?.entity || config?.title);
 
 export const readStoredLightsState = (key: string): LightsCardState | undefined => {
   try {
@@ -30,6 +30,20 @@ export const resolveLightsState = (
     return parseLightsState(helperState);
   }
   return readStoredLightsState(storageKey) ?? parseLightsState();
+};
+
+export const hasStoredLightsState = (
+  helperState: unknown,
+  storageKey: string,
+): boolean => {
+  if (typeof helperState === "string" && isLightsHelperPayload(helperState)) {
+    return true;
+  }
+  try {
+    return Boolean(globalThis.localStorage?.getItem(`${storageKey}:state`));
+  } catch {
+    return false;
+  }
 };
 
 export const writeStoredLightsState = (key: string, state: LightsCardState): void => {

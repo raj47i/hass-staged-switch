@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scene Studio preview</title>
+    <style>
+      :root {
+        --primary-color: #03a9f4;
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --card-background-color: #fff;
+        --primary-background-color: #f2f4f6;
+        --divider-color: rgba(0, 0, 0, 0.12);
+        --error-color: #db4437;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font-family: Roboto, system-ui, sans-serif;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+      }
+      .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 56px;
+        padding: 0 20px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+      .app-header .brand {
+        font-size: 20px;
+        font-weight: 400;
+      }
+      nav {
+        display: flex;
+        gap: 4px;
+      }
+      nav a {
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: var(--secondary-text-color);
+        text-decoration: none;
+      }
+      nav a.active,
+      nav a:hover {
+        color: var(--primary-color);
+        background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+      }
+      .layout {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        min-height: 0;
+      }
+      .main {
+        min-width: 0;
+      }
+      .live {
+        background: #fff;
+        border-left: 1px solid var(--divider-color);
+        padding: 20px 16px;
+        font-size: 13px;
+        overflow: auto;
+      }
+      .live h2 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .live h3 {
+        margin: 16px 0 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--secondary-text-color);
+      }
+      .live p {
+        margin: 0 0 8px;
+        color: var(--secondary-text-color);
+      }
+      .live li {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--divider-color);
+        list-style: none;
+      }
+      .live ul {
+        margin: 0;
+        padding: 0;
+      }
+      .live .on {
+        color: var(--primary-color);
+        font-weight: 600;
+      }
+      .live .off {
+        color: var(--secondary-text-color);
+      }
+      @media (max-width: 960px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .live {
+          border-left: 0;
+          border-top: 1px solid var(--divider-color);
+        }
+      }
+    </style>
+    <script type="module" src="/dist/staged-switch-card.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">Scene Studio</div>
+      <nav>
+        <a class="active" href="studio.html">Scene Studio</a>
+        <a href="preview.html">Dashboard cards</a>
+      </nav>
+    </header>
+    <div class="layout">
+      <div class="main">
+        <scene-studio-panel id="studio"></scene-studio-panel>
+      </div>
+      <aside class="live">
+        <h2>Preview entities</h2>
+        <p>Start with a scene set. Try a scene on the last wizard step to see these flip.</p>
+        <div id="entity-list"></div>
+      </aside>
+    </div>
+    <script type="module">
+      const now = () => new Date().toISOString();
+      const makeState = (entity_id, state, attributes = {}) => ({
+        entity_id,
+        state,
+        attributes,
+        last_changed: now(),
+        last_updated: now(),
+      });
+
+      const rgbLight = (entity_id, name) =>
+        makeState(entity_id, "off", {
+          friendly_name: name,
+          supported_color_modes: ["rgb"],
+          color_mode: "rgb",
+          brightness: 0,
+          rgb_color: [255, 138, 29],
+          effect_list: ["colorloop", "random", "strobe"],
+        });
+
+      const dimLight = (entity_id, name) =>
+        makeState(entity_id, "off", {
+          friendly_name: name,
+          supported_color_modes: ["brightness"],
+          color_mode: "brightness",
+          brightness: 0,
+        });
+
+      const toggle = (entity_id, name) =>
+        makeState(entity_id, "off", { friendly_name: name });
+
+      const states = {
+        "light.living_rgb": rgbLight("light.living_rgb", "Living RGB"),
+        "light.guest_rgb": rgbLight("light.guest_rgb", "Guest RGB"),
+        "light.sofa_rgb": rgbLight("light.sofa_rgb", "Sofa RGB"),
+        "light.warm_left": dimLight("light.warm_left", "Warm left"),
+        "light.warm_right": dimLight("light.warm_right", "Warm right"),
+        "light.warm_corner": dimLight("light.warm_corner", "Warm corner"),
+        "light.white_left": dimLight("light.white_left", "White left"),
+        "light.white_right": dimLight("light.white_right", "White right"),
+        "light.lamp": dimLight("light.lamp", "Lamp"),
+        "light.porch": dimLight("light.porch", "Porch"),
+        "switch.fan": toggle("switch.fan", "Fan"),
+        "switch.heater": toggle("switch.heater", "Heater"),
+        "switch.pump": toggle("switch.pump", "Pump"),
+        "switch.soundbar": toggle("switch.soundbar", "Soundbar"),
+        "fan.patio": toggle("fan.patio", "Patio fan"),
+      };
+
+      const GROUPS = [
+        {
+          title: "Lights",
+          ids: [
+            "light.living_rgb",
+            "light.guest_rgb",
+            "light.sofa_rgb",
+            "light.warm_left",
+            "light.warm_right",
+            "light.warm_corner",
+            "light.white_left",
+            "light.white_right",
+            "light.lamp",
+            "light.porch",
+          ],
+        },
+        {
+          title: "Switches",
+          ids: [
+            "switch.fan",
+            "switch.heater",
+            "switch.pump",
+            "switch.soundbar",
+            "fan.patio",
+          ],
+        },
+      ];
+
+      const sceneStore = {};
+      let dashboards = [];
+      const studio = document.getElementById("studio");
+      const entityList = document.getElementById("entity-list");
+
+      const brightnessToPercent = (value) => {
+        const brightness = Number(value);
+        if (!Number.isFinite(brightness) || brightness <= 0) {
+          return undefined;
+        }
+        return Math.min(100, Math.max(1, Math.round((brightness / 255) * 100)));
+      };
+
+      const lookLabel = (item) => {
+        if (item.state !== "on") {
+          return "Off";
+        }
+        const percent = brightnessToPercent(item.attributes.brightness);
+        const rgb = item.attributes.rgb_color;
+        if (Array.isArray(rgb) && item.attributes.supported_color_modes?.includes("rgb")) {
+          const hex = rgb
+            .map((part) => Number(part).toString(16).padStart(2, "0"))
+            .join("");
+          return percent ? `On · #${hex} · ${percent}%` : `On · #${hex}`;
+        }
+        if (percent) {
+          return `On · ${percent}%`;
+        }
+        return "On";
+      };
+
+      const renderEntities = () => {
+        entityList.innerHTML = GROUPS.map((group) => {
+          const items = group.ids
+            .map((id) => states[id])
+            .filter(Boolean)
+            .map((item) => {
+              const on = item.state === "on";
+              return `<li><span>${item.attributes.friendly_name}</span><span class="${on ? "on" : "off"}">${lookLabel(item)}</span></li>`;
+            })
+            .join("");
+          return `<h3>${group.title}</h3><ul>${items}</ul>`;
+        }).join("");
+      };
+
+      const refresh = () => {
+        studio.hass = { ...hass, states: { ...states } };
+        renderEntities();
+      };
+
+      const applyEntities = (entities = {}) => {
+        Object.entries(entities).forEach(([entityId, look]) => {
+          const current = states[entityId];
+          if (!current) {
+            return;
+          }
+          const payload =
+            look && typeof look === "object" ? look : { state: look };
+          const state = payload.state;
+          if (state === "on" || state === "off") {
+            current.state = state;
+          }
+          current.attributes = { ...current.attributes };
+          if (typeof payload.brightness === "number") {
+            current.attributes.brightness = payload.brightness;
+          }
+          if (Array.isArray(payload.rgb_color)) {
+            current.attributes.rgb_color = payload.rgb_color;
+          }
+          if (state === "off") {
+            current.attributes.brightness = 0;
+          }
+          current.last_updated = now();
+        });
+      };
+
+      const areas = {
+        living: { area_id: "living", name: "Living room" },
+        patio: { area_id: "patio", name: "Patio" },
+        guest: { area_id: "guest", name: "Guest room" },
+      };
+
+      const devices = {
+        living_rgb_kit: {
+          id: "living_rgb_kit",
+          name: "Living RGB kit",
+          area_id: "living",
+        },
+        warm_strip: { id: "warm_strip", name: "Warm strip", area_id: "living" },
+        white_pair: { id: "white_pair", name: "White pair", area_id: "living" },
+        patio_box: { id: "patio_box", name: "Patio box", area_id: "patio" },
+        guest_lamp: { id: "guest_lamp", name: "Guest lamp", area_id: "guest" },
+      };
+
+      const entities = {
+        "light.living_rgb": {
+          entity_id: "light.living_rgb",
+          device_id: "living_rgb_kit",
+          area_id: "living",
+        },
+        "light.sofa_rgb": {
+          entity_id: "light.sofa_rgb",
+          device_id: "living_rgb_kit",
+          area_id: "living",
+        },
+        "light.lamp": {
+          entity_id: "light.lamp",
+          device_id: "living_rgb_kit",
+          area_id: "living",
+        },
+        "light.warm_left": {
+          entity_id: "light.warm_left",
+          device_id: "warm_strip",
+          area_id: "living",
+        },
+        "light.warm_right": {
+          entity_id: "light.warm_right",
+          device_id: "warm_strip",
+          area_id: "living",
+        },
+        "light.warm_corner": {
+          entity_id: "light.warm_corner",
+          device_id: "warm_strip",
+          area_id: "living",
+        },
+        "light.white_left": {
+          entity_id: "light.white_left",
+          device_id: "white_pair",
+          area_id: "living",
+        },
+        "light.white_right": {
+          entity_id: "light.white_right",
+          device_id: "white_pair",
+          area_id: "living",
+        },
+        "light.porch": {
+          entity_id: "light.porch",
+          device_id: "patio_box",
+          area_id: "patio",
+        },
+        "switch.fan": {
+          entity_id: "switch.fan",
+          device_id: "patio_box",
+          area_id: "patio",
+        },
+        "switch.heater": {
+          entity_id: "switch.heater",
+          device_id: "patio_box",
+          area_id: "patio",
+        },
+        "fan.patio": {
+          entity_id: "fan.patio",
+          device_id: "patio_box",
+          area_id: "patio",
+        },
+        "light.guest_rgb": {
+          entity_id: "light.guest_rgb",
+          device_id: "guest_lamp",
+          area_id: "guest",
+        },
+        "switch.pump": { entity_id: "switch.pump" },
+        "switch.soundbar": { entity_id: "switch.soundbar" },
+      };
+
+      const hass = {
+        language: "en",
+        localize: (key) => key,
+        states,
+        entities,
+        devices,
+        areas,
+        async callService(domain, service, data = {}) {
+          if (domain === "scene" && service === "apply") {
+            applyEntities(data.entities);
+            refresh();
+            return;
+          }
+          if (domain === "scene" && service === "turn_on") {
+            const ids = [].concat(data.entity_id || []);
+            ids.forEach((entityId) => {
+              const id = String(entityId).replace(/^scene\./, "");
+              const scene = sceneStore[id];
+              if (scene) {
+                applyEntities(scene.entities);
+                if (states[entityId]) {
+                  states[entityId].state = now();
+                }
+              }
+            });
+            refresh();
+          }
+        },
+        user: { is_admin: true },
+        async callWS(msg) {
+          if (msg?.type === "lovelace/dashboards/list") {
+            return dashboards;
+          }
+          if (msg?.type === "lovelace/dashboards/create") {
+            const item = {
+              id: "scene_studio",
+              url_path: msg.url_path,
+              title: msg.title,
+              icon: msg.icon,
+              show_in_sidebar: msg.show_in_sidebar !== false,
+              require_admin: true,
+            };
+            dashboards = [item];
+            return item;
+          }
+          if (msg?.type === "lovelace/dashboards/update") {
+            dashboards = dashboards.map((item) =>
+              item.id === msg.dashboard_id
+                ? { ...item, show_in_sidebar: Boolean(msg.show_in_sidebar) }
+                : item,
+            );
+            return dashboards[0];
+          }
+          if (msg?.type === "lovelace/config" || msg?.type === "lovelace/config/save") {
+            return { title: "Scene Studio", views: [] };
+          }
+          throw new Error(`Unknown websocket command ${msg?.type}`);
+        },
+        async callApi(method, path, data) {
+          const match = /^config\/scene\/config\/(.+)$/.exec(path || "");
+          const id = match ? decodeURIComponent(match[1]) : "";
+          if (!id) {
+            throw new Error(`Unknown API path: ${path}`);
+          }
+          if (method === "GET") {
+            const scene = sceneStore[id];
+            if (!scene) {
+              throw new Error("Scene not found");
+            }
+            return structuredClone(scene);
+          }
+          if (method === "DELETE") {
+            delete sceneStore[id];
+            delete states[`scene.${id}`];
+            refresh();
+            return null;
+          }
+          if (method === "POST") {
+            const scene = { ...data, id };
+            sceneStore[id] = scene;
+            states[`scene.${id}`] = makeState(`scene.${id}`, now(), {
+              id,
+              friendly_name: scene.name,
+              icon: scene.icon,
+              entities: scene.entities,
+            });
+            refresh();
+            return scene;
+          }
+          throw new Error(`Unknown method ${method}`);
+        },
+      };
+
+      refresh();
+    </script>
+  </body>
+</html>

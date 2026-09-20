@@ -19,8 +19,22 @@ export const safeIcon = (value: unknown, fallback = ""): string => {
   return icon || fallback;
 };
 
-export const isValidEntityId = (entityId?: string): entityId is string =>
-  Boolean(entityId && ENTITY_ID_PATTERN.test(entityId));
+export const isValidEntityId = (
+  entityId?: string | null,
+): entityId is string => Boolean(entityId && ENTITY_ID_PATTERN.test(entityId));
+
+export const uniqueEntityIds = (ids: Iterable<string | undefined | null>): string[] => {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const entityId of ids) {
+    if (!isValidEntityId(entityId) || seen.has(entityId)) {
+      continue;
+    }
+    seen.add(entityId);
+    next.push(entityId);
+  }
+  return next;
+};
 
 export const domainOf = (entityId?: string): string =>
   entityId?.split(".", 1)[0] ?? "";
@@ -155,13 +169,61 @@ export const friendlyNameFromEntity = (entityId: string): string => {
     .join(" ");
 };
 
+const trimmedName = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const name = value.trim();
+  return name || undefined;
+};
+
+const registryDisplayName = (
+  hass: HomeAssistant | undefined,
+  entityId: string,
+): string | undefined => {
+  const entry = hass?.entities?.[entityId];
+  const device = entry?.device_id ? hass?.devices?.[entry.device_id] : undefined;
+  return (
+    trimmedName(entry?.name) ||
+    trimmedName(hass?.states[entityId]?.attributes.friendly_name) ||
+    trimmedName(entry?.original_name) ||
+    trimmedName(device?.name_by_user) ||
+    trimmedName(device?.name)
+  );
+};
+
+export const generatedEntityLabel = (entityId: string): string => {
+  const [domain, objectId] = entityId.split(".");
+  if (!objectId) {
+    return friendlyNameFromEntity(entityId);
+  }
+  return `${domain.charAt(0).toUpperCase()}${domain.slice(1)} ${objectId}`;
+};
+
+export const isGeneratedEntityLabel = (
+  name: string | undefined,
+  entityId: string,
+  liveName?: string,
+): boolean => {
+  const label = name?.trim();
+  if (!label) {
+    return true;
+  }
+  return (
+    label === liveName ||
+    label === friendlyNameFromEntity(entityId) ||
+    label === generatedEntityLabel(entityId) ||
+    label === entityId
+  );
+};
+
 export const entityDisplayName = (
   hass: HomeAssistant | undefined,
   entityId: string,
   fallback?: string,
 ): string =>
-  fallback ||
-  hass?.states[entityId]?.attributes.friendly_name ||
+  trimmedName(fallback) ||
+  registryDisplayName(hass, entityId) ||
   friendlyNameFromEntity(entityId) ||
   entityId;
 

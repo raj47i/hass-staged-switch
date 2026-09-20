@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { hexToHue, hexToRgb, hueToHex, rgbToHex } from "./color";
 import {
   allLightIds,
@@ -42,6 +42,7 @@ import {
   serializeLightsState,
 } from "./state";
 import { applyLightsMode, rowEntityIds } from "./apply";
+import { STUDIO_SCENE_GAP_MS } from "../../studio/const";
 import type { HomeAssistant } from "../../shared/types";
 
 describe("color helpers", () => {
@@ -713,5 +714,41 @@ describe("applyLightsMode", () => {
         data: { entity_id: ["light.reading", "switch.sconce"] },
       },
     ]);
+  });
+
+  it("goes through Off / Default, then the studio look, without extra light calls", async () => {
+    vi.useFakeTimers();
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    try {
+      const pending = applyLightsMode(
+        hassStub(calls),
+        { ...config, studio: "living" },
+        exclusiveLightsState(undefined, "warm", { stage: 1 }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls).toEqual([
+        {
+          domain: "scene",
+          service: "turn_on",
+          data: { entity_id: "scene.ssl_living_off" },
+        },
+      ]);
+      await vi.advanceTimersByTimeAsync(STUDIO_SCENE_GAP_MS);
+      await pending;
+      expect(calls).toEqual([
+        {
+          domain: "scene",
+          service: "turn_on",
+          data: { entity_id: "scene.ssl_living_off" },
+        },
+        {
+          domain: "scene",
+          service: "turn_on",
+          data: { entity_id: "scene.ssl_living_w1" },
+        },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

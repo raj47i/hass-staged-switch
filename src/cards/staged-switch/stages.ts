@@ -83,17 +83,16 @@ export const resolveStages = (
   slider?: HassEntity,
 ): ResolvedStage[] => {
   if (config.stages?.length) {
-    return limitResolvedStages(
-      applyStageNames(
-        config,
-        config.stages.map((stage, index) => ({
-          index,
-          name: stage.name?.trim() || `Stage ${index}`,
-          icon: stage.icon,
-          targets: targetsFromStageSwitches(stage.switches),
-        })),
-      ),
+    const stages = applyStageNames(
+      config,
+      config.stages.map((stage, index) => ({
+        index,
+        name: stage.name?.trim() || `Stage ${index}`,
+        icon: stage.icon,
+        targets: targetsFromStageSwitches(stage.switches),
+      })),
     );
+    return config.studio ? stages.map((stage, index) => ({ ...stage, index })) : limitResolvedStages(stages);
   }
 
   const switches = (config.switches ?? [])
@@ -241,7 +240,7 @@ export const isEmptyStagedSwitchConfig = (
   if (!config) {
     return true;
   }
-  if (isValidEntityId(config.entity) || config.stages?.length) {
+  if (config.studio || isValidEntityId(config.entity) || config.stages?.length) {
     return false;
   }
   return !(config.switches ?? []).some((item) =>

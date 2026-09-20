@@ -9,6 +9,7 @@ import {
   safeIcon,
 } from "../../shared/entities";
 import type { SwitchEntityConfig, SwitchState, SwitchTarget } from "../../shared/types";
+import { showsEntityButtons } from "../../shared/entity-buttons";
 import { isEmptyLightsConfig, rowIsConfigured, rowRoster, visibleLights } from "./roster";
 import {
   DEFAULT_LIGHT_STAGES,
@@ -39,6 +40,10 @@ export const maxRowStages = (
   config: StagedLightsCardConfig | undefined,
   row: StageRowId,
 ): number => {
+  const mapped = rowStageMaps(config, row).length;
+  if (config?.studio && mapped > 0) {
+    return mapped;
+  }
   const entities = rowRoster(config, row).length;
   if (entities < MIN_WARM_WHITE_ENTITIES) {
     return 0;
@@ -85,6 +90,16 @@ export const intensityName = (stage: number, count: number): string => {
   return names[clamp(Math.round(finiteOr(stage, 1)), 1, names.length) - 1] ?? names[0] ?? "Min";
 };
 
+export const configuredStageNames = (
+  config: StagedLightsCardConfig | undefined,
+  row: StageRowId,
+): string[] => {
+  const count = lightsStageCount(config, row);
+  const fallback = intensityNames(count);
+  const named = rowStageMaps(config, row);
+  return fallback.map((name, index) => named[index]?.name?.trim() || name);
+};
+
 export const parseRgbPercent = (value: unknown): number | undefined => {
   const percent = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(percent)) {
@@ -101,7 +116,9 @@ export const lightsLayoutRows = (config?: StagedLightsCardConfig): number => {
     return 4;
   }
   const rgbExtra = rowRoster(config, "rgb").length ? 1 : 0;
-  const chipRows = config?.show_switches ? chunkEvenly(visibleLights(config)).length : 0;
+  const chipRows = showsEntityButtons(config)
+    ? chunkEvenly(visibleLights(config)).length
+    : 0;
   return 1 + configuredRows(config).length + rgbExtra + chipRows;
 };
 

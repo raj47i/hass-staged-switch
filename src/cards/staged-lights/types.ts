@@ -18,6 +18,8 @@ export interface RowIcons {
 
 export interface StagedLightsCardConfig extends LovelaceCardConfig {
   type: string;
+  /** Scene Studio set slug. Rows and stages are read from those scenes. */
+  studio?: string;
   /** Ignored leftover. Existing YAML may still have it. */
   title?: string;
   entity?: string;
@@ -34,6 +36,10 @@ export interface StagedLightsCardConfig extends LovelaceCardConfig {
   /** Ignored leftover. The card always controls its lights. */
   direct_control?: boolean;
   show_switches?: boolean;
+  /** Scene-set entities hidden from the chip row. Missing = all shown once `show_switches` is on. */
+  hidden_entities?: string[];
+  /** Full scene-set roster for chips, including entities not in a group. */
+  switches?: Array<string | SwitchEntityConfig>;
 }
 
 export interface RgbRowState {

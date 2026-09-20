@@ -1,4 +1,5 @@
 import { isValidEntityId } from "./entities";
+import { callHassService, isUnreachableError } from "./hass";
 import type { HomeAssistant, SwitchTarget } from "./types";
 
 export const partitionTargets = (
@@ -28,12 +29,43 @@ export const applyToggleTargets = async (
     return;
   }
   const { on, off } = partitionTargets(targets);
-  if (on.length) {
-    await hass.callService("homeassistant", "turn_on", { entity_id: on }, { entity_id: on });
-  }
-  if (off.length) {
-    await hass.callService("homeassistant", "turn_off", { entity_id: off }, { entity_id: off });
-  }
+  const run = async (service: "turn_on" | "turn_off", ids: string[]): Promise<void> => {
+    if (!ids.length) {
+      return;
+    }
+    try {
+      await callHassService(
+        hass,
+        "homeassistant",
+        service,
+        { entity_id: ids },
+        { entity_id: ids },
+      );
+    } catch (error) {
+      if (!isUnreachableError(error) || ids.length === 1) {
+        throw error;
+      }
+      const leftover: unknown[] = [];
+      for (const entityId of ids) {
+        try {
+          await callHassService(
+            hass,
+            "homeassistant",
+            service,
+            { entity_id: entityId },
+            { entity_id: entityId },
+          );
+        } catch (item) {
+          leftover.push(item);
+        }
+      }
+      if (leftover.length) {
+        throw leftover[0];
+      }
+    }
+  };
+  await run("turn_on", on);
+  await run("turn_off", off);
 };
 
 export const setEntityOnOff = async (
@@ -41,7 +73,7 @@ export const setEntityOnOff = async (
   entityId: string,
   on: boolean,
 ): Promise<void> => {
-  await hass.callService("homeassistant", on ? "turn_on" : "turn_off", {
+  await callHassService(hass, "homeassistant", on ? "turn_on" : "turn_off", {
     entity_id: entityId,
   });
 };
@@ -51,7 +83,7 @@ export const setInputNumber = async (
   entityId: string,
   value: number,
 ): Promise<void> => {
-  await hass.callService("input_number", "set_value", {
+  await callHassService(hass, "input_number", "set_value", {
     entity_id: entityId,
     value,
   });
@@ -62,7 +94,7 @@ export const setInputText = async (
   entityId: string,
   value: string,
 ): Promise<void> => {
-  await hass.callService("input_text", "set_value", {
+  await callHassService(hass, "input_text", "set_value", {
     entity_id: entityId,
     value,
   });
@@ -84,7 +116,7 @@ export const applyLightLooks = async (
   }
   const target = { entity_id: ids };
   if (!look.on || look.brightness <= 0) {
-    await hass.callService("light", "turn_off", { entity_id: ids }, target);
+    await callHassService(hass, "light", "turn_off", { entity_id: ids }, target);
     return;
   }
   const data: Record<string, unknown> = {
@@ -95,13 +127,13 @@ export const applyLightLooks = async (
     data.rgb_color = look.rgb;
   }
   try {
-    await hass.callService("light", "turn_on", data, target);
+    await callHassService(hass, "light", "turn_on", data, target);
   } catch {
     delete data.rgb_color;
     try {
-      await hass.callService("light", "turn_on", data, target);
+      await callHassService(hass, "light", "turn_on", data, target);
     } catch {
-      await hass.callService("homeassistant", "turn_on", { entity_id: ids }, target);
+      await callHassService(hass, "homeassistant", "turn_on", { entity_id: ids }, target);
     }
   }
 };

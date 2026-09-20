@@ -9,6 +9,7 @@ import {
   entityIcon,
   entityStateLabel,
   errorMessage,
+  friendlyActionError,
   isValidEntityId,
   registerLovelaceCard,
   relevantHassChanged,
@@ -28,8 +29,17 @@ import {
   ROW_ORDER,
 } from "./const";
 import "./editor";
+import {
+  isRgbLiveTweak,
+  hydrateStudioCard,
+  mergeLightsStudioConfig,
+  peekStudioScenes,
+  resolveStudioLightsState,
+  studioLooksMatch,
+} from "../../studio/bind";
+import { showsEntityButtons } from "../../shared/entity-buttons";
 import { applyLightsMode } from "./apply";
-import { lightsStorageKey, resolveLightsState, writeStoredLightsState } from "./persist";
+import { lightsStorageKey, writeStoredLightsState } from "./persist";
 import {
   isEmptyLightsConfig,
   isLightsCardConfig,
@@ -38,8 +48,8 @@ import {
 } from "./roster";
 import {
   configuredRows,
+  configuredStageNames,
   displayRgbPercent,
-  intensityNames,
   lightsLayoutRows,
   lightsStageCount,
   parseRgbPercent,
@@ -61,7 +71,10 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   @state() private _pending = false;
   @state() private _error?: string;
   @state() private _rgbDragPercent?: number;
+  @state() private _studioTick = 0;
   private _queue = new SerialActionQueue<() => Promise<void>>();
+  private _studioSlug?: string;
+  private _studioCacheVersion = 0;
 
   public static async getConfigElement() {
     return document.createElement(`${CARD_NAME}-editor`);
@@ -84,12 +97,15 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     this._config = { ...config };
     this._state = undefined;
     this._rgbDragPercent = undefined;
+    this._studioSlug = undefined;
+    this._studioCacheVersion = 0;
+    this._pending = false;
     this._queue.clear();
     this._error = undefined;
   }
 
   public getCardSize(): number {
-    return lightsLayoutRows(this._config);
+    return lightsLayoutRows(this._resolved);
   }
 
   public getGridOptions() {
@@ -97,16 +113,23 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       columns: 12,
       min_columns: 6,
       max_columns: 12,
-      min_rows: lightsLayoutRows(this._config),
+      min_rows: lightsLayoutRows(this._resolved),
     };
   }
 
+  private get _resolved(): StagedLightsCardConfig | undefined {
+    if (!this._config) {
+      return undefined;
+    }
+    return mergeLightsStudioConfig(this._config, peekStudioScenes(this.hass));
+  }
+
   private get _storageKey() {
-    return lightsStorageKey(this._config);
+    return lightsStorageKey(this._resolved);
   }
 
   private get _helper() {
-    const entityId = this._config?.entity;
+    const entityId = this._resolved?.entity;
     if (!entityId || !this.hass?.states) {
       return undefined;
     }
@@ -117,22 +140,27 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     if (this._state) {
       return this._state;
     }
-    return resolveLightsState(this._helper?.state, this._storageKey);
+    return resolveStudioLightsState(
+      this.hass,
+      this._resolved,
+      this._helper?.state,
+      this._storageKey,
+    );
   }
 
   private _stageCount(row: "warm" | "white") {
-    return lightsStageCount(this._config, row);
+    return lightsStageCount(this._resolved, row);
   }
 
   private get _rows(): LightRowId[] {
-    return configuredRows(this._config);
+    return configuredRows(this._resolved);
   }
 
   private get _visibleEntities() {
-    if (!this._config?.show_switches) {
+    if (!showsEntityButtons(this._resolved)) {
       return [];
     }
-    return visibleLights(this._config);
+    return visibleLights(this._resolved);
   }
 
   protected shouldUpdate(changed: PropertyValues): boolean {
@@ -141,7 +169,8 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       changed.has("_state") ||
       changed.has("_pending") ||
       changed.has("_error") ||
-      changed.has("_rgbDragPercent")
+      changed.has("_rgbDragPercent") ||
+      changed.has("_studioTick")
     ) {
       return true;
     }
@@ -149,25 +178,62 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
       return relevantHassChanged(
         changed.get("hass") as HomeAssistant | undefined,
         this.hass,
-        relevantLightEntityIds(this._config),
+        relevantLightEntityIds(this._resolved),
       );
     }
     return true;
   }
 
+  public connectedCallback(): void {
+    super.connectedCallback();
+    void this._loadStudio();
+  }
+
   protected updated(changed: PropertyValues): void {
-    if (!changed.has("hass") || !this._state || !this._helper) {
+    if (changed.has("hass") || changed.has("_config")) {
+      void this._loadStudio();
+    }
+    if (!changed.has("hass") || !this._state || this._pending) {
       return;
     }
-    if (this._helper.state === serializeLightsState(this._state)) {
+    if (this._resolved?.studio) {
+      if (
+        studioLooksMatch(
+          this._state,
+          resolveStudioLightsState(
+            this.hass,
+            this._resolved,
+            this._helper?.state,
+            this._storageKey,
+          ),
+        )
+      ) {
+        this._state = undefined;
+      }
+      return;
+    }
+    if (this._helper && this._helper.state === serializeLightsState(this._state)) {
       this._state = undefined;
     }
+  }
+
+  private async _loadStudio(): Promise<void> {
+    const next = await hydrateStudioCard(this.hass, this._config?.studio, {
+      slug: this._studioSlug,
+      version: this._studioCacheVersion,
+    });
+    if (!next?.changed) {
+      return;
+    }
+    this._studioSlug = next.slug;
+    this._studioCacheVersion = next.version;
+    this._studioTick += 1;
   }
 
   private async _writeState(next: LightsCardState): Promise<void> {
     this._state = next;
     writeStoredLightsState(this._storageKey, next);
-    const helperId = this._config?.entity;
+    const helperId = this._resolved?.entity;
     if (!this.hass || !isValidEntityId(helperId)) {
       return;
     }
@@ -184,7 +250,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     try {
       await task();
     } catch (error) {
-      this._error = errorMessage(error, "Failed to update lights");
+      this._error = friendlyActionError(error, "Failed to update lights");
     } finally {
       this._pending = false;
     }
@@ -195,13 +261,16 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   }
 
   private _commit(next: LightsCardState): void {
+    const previous = this._current;
     void this._run(async () => {
       try {
         await this._writeState(next);
       } catch (error) {
         this._error = errorMessage(error, "Failed to update helper");
       }
-      await applyLightsMode(this.hass, this._config, next);
+      await applyLightsMode(this.hass, this._resolved, next, {
+        liveRgb: Boolean(this._resolved?.studio && isRgbLiveTweak(previous, next)),
+      });
     });
   }
 
@@ -333,8 +402,12 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
           type="button"
           aria-label="${meta.label} ${label}"
           aria-pressed=${on && stage === current}
+          @click=${(ev: Event) => {
+            ev.stopPropagation();
+            this._selectStage(row, stage);
+          }}
         >
-          <ha-icon .icon=${rowStageIcon(this._config, row, stage)}></ha-icon>
+          <ha-icon .icon=${rowStageIcon(this._resolved, row, stage)}></ha-icon>
         </button>
         <span class="tick ${on && stage === current ? "active" : ""}">${label}</span>
       </div>
@@ -348,7 +421,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   private _renderPower(row: LightRowId) {
     const meta = ROW_META[row];
     const on = this._rowIsOn(row);
-    const icons = rowPowerIcons(this._config, row);
+    const icons = rowPowerIcons(this._resolved, row);
     return html`
       <button
         class="power-icon ${on ? "on" : "off"}"
@@ -369,7 +442,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     const rgb = this._current.rgb;
     const color = rgb?.hex || DEFAULT_RGB_HEX;
     const percent = displayRgbPercent(rgb?.brightness ?? 1, this._rgbDragPercent);
-    const presets = resolveRgbPresets(this._config);
+    const presets = resolveRgbPresets(this._resolved);
     const selectedPreset = presets.find(
       (preset) => normalizeHex(preset, "") === normalizeHex(color, ""),
     );
@@ -421,7 +494,7 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
   private _renderStageControls(row: "warm" | "white", rowIndex = 1) {
     const meta = ROW_META[row];
     const count = this._stageCount(row);
-    const names = intensityNames(count);
+    const names = configuredStageNames(this._resolved, row);
     const rowState = this._current[row];
     const current = clamp(Math.round(rowState?.stage ?? 1), 1, count);
     const fill = rowFillPercent(
@@ -482,22 +555,22 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
     if (!this._config) {
       return html`<ha-card><div class="warning">Invalid configuration</div></ha-card>`;
     }
-    if (isEmptyLightsConfig(this._config)) {
+    if (isEmptyLightsConfig(this._resolved)) {
       return this._renderShowcase();
     }
     if (!this.hass) {
       return html`<ha-card><div class="warning">Waiting for Home Assistant</div></ha-card>`;
     }
-    if (this._config.entity && !isValidEntityId(this._config.entity)) {
-      return html`<ha-card><div class="warning">Invalid helper: ${this._config.entity}</div></ha-card>`;
+    if (this._resolved?.entity && !isValidEntityId(this._resolved.entity)) {
+      return html`<ha-card><div class="warning">Invalid helper: ${this._resolved.entity}</div></ha-card>`;
     }
 
     return html`
       <ha-card>
-        ${this._error ? html`<div class="warning">${this._error}</div>` : nothing}
-        ${this._config.entity && !this._helper
+        ${this._error ? html`<div class="warning" role="alert">${this._error}</div>` : nothing}
+        ${this._resolved?.entity && !this._helper
           ? html`<div class="notice">
-              Helper not found: ${this._config.entity}. This browser will still
+              Helper not found: ${this._resolved.entity}. This browser will still
               remember the last colors and stages.
             </div>`
           : nothing}
@@ -516,7 +589,7 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "Room lights as exclusive rows: RGB brightness and color presets, plus Warm and White stages (Min to Max) when each has at least two lights. One text helper stores the whole card.",
+    "Room lights as exclusive RGB / Warm / White rows. Pick a Scene Studio set, or configure entities by hand.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });

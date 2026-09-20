@@ -34,12 +34,18 @@
         z-index: 2;
         display: flex;
         align-items: center;
+        justify-content: space-between;
         height: 56px;
         padding: 0 20px;
         background: #fff;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
         font-size: 20px;
         font-weight: 400;
+      }
+      .app-header a {
+        font-size: 14px;
+        color: #03a9f4;
+        text-decoration: none;
       }
       .view {
         display: grid;
@@ -134,7 +140,10 @@
     <script type="module" src="/dist/staged-switch-card.js"></script>
   </head>
   <body>
-    <header class="app-header">Overview</header>
+    <header class="app-header">
+      Overview
+      <a href="studio.html">Scene Studio</a>
+    </header>
     <main class="view">
       <section>
         <h1 class="section-title">Dashboard preview</h1>

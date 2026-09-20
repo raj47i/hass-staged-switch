@@ -37,6 +37,13 @@ import {
   type StageRowId,
 } from "./stages";
 import { editorStyles } from "./styles";
+import { peekStudioScenes, refreshStudioScenes, studioSetOptions } from "../../studio/bind";
+import {
+  hiddenEntityIds,
+  renderEntityButtonsEditor,
+  studioSetEntityIds,
+  toggleHiddenEntity,
+} from "../../studio/entity-buttons";
 import type { LightRowId, RowIcons, StagedLightsCardConfig } from "./types";
 
 type EditorPage =
@@ -59,7 +66,7 @@ const PAGES: Array<{ id: EditorPage; group: "entities" | "setup"; label: string 
 @customElement(`${CARD_NAME}-editor`)
 export class StagedLightsCardEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
-  @state() private _config?: StagedLightsCardConfig;
+  @state() protected _config?: StagedLightsCardConfig;
   @state() private _page: EditorPage = "rgb-entities";
   @state() private _areaPicker = "";
   @state() private _devicePicker = "";
@@ -70,6 +77,28 @@ export class StagedLightsCardEditor extends LitElement {
       return;
     }
     this._config = { ...config };
+  }
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    void refreshStudioScenes(this.hass).then(() => this.requestUpdate());
+  }
+
+  private _studioChanged(ev: Event): void {
+    const slug = pickedValue(ev);
+    if (!this._config) {
+      return;
+    }
+    if (!slug) {
+      this._update({ studio: undefined });
+      return;
+    }
+    this._config = {
+      type: this._config.type,
+      studio: slug,
+      show_switches: this._config.show_switches,
+    };
+    fireConfigChanged(this, this._config);
   }
 
   private _update(patch: Partial<StagedLightsCardConfig>): void {
@@ -615,33 +644,78 @@ export class StagedLightsCardEditor extends LitElement {
 
   private _renderSharedFields() {
     const config = this._config!;
+    const sets = studioSetOptions(this.hass, ["light", "minimal"]);
     return html`
-      <ha-entity-picker
-        .hass=${this.hass}
-        .value=${config.entity ?? ""}
-        label="State helper (input_text)"
-        .includeDomains=${["input_text"]}
-        allow-custom-entity
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) =>
-          this._update({ entity: ev.detail?.value || undefined })}
-      ></ha-entity-picker>
-      <span class="help">
-        One Text helper is enough. Create it under Helpers → Text, set max
-        length to 255.
-      </span>
+      <label class="row">
+        <span class="label">Scene Studio set</span>
+        <select
+          class="text-input"
+          .value=${config.studio ?? ""}
+          @change=${this._studioChanged}
+        >
+          <option value="">Configure this card manually</option>
+          ${sets.map(
+            (set) => html`<option value=${set.slug}>${set.name}</option>`,
+          )}
+        </select>
+      </label>
+      ${config.studio
+        ? html`
+            <span class="help">
+              This card uses the
+              ${sets.find((set) => set.slug === config.studio)?.name ?? config.studio}
+              scene set. Edit it in Scene Studio.
+            </span>
+          `
+        : html`
+            <ha-entity-picker
+              .hass=${this.hass}
+              .value=${config.entity ?? ""}
+              label="State helper (input_text)"
+              .includeDomains=${["input_text"]}
+              allow-custom-entity
+              @value-changed=${(ev: CustomEvent<{ value?: string }>) =>
+                this._update({ entity: ev.detail?.value || undefined })}
+            ></ha-entity-picker>
+            <span class="help">
+              One Text helper is enough. Create it under Helpers → Text, set max
+              length to 255.
+            </span>
+          `}
 
       ${this._entityButtonsEnabled
-        ? html`
-            <div class="inline">
-              <span class="label">Show entity buttons</span>
-              <input
-                type="checkbox"
-                .checked=${Boolean(config.show_switches)}
-                @change=${(ev: Event) =>
-                  this._update({ show_switches: this._checkboxChecked(ev) })}
-              />
-            </div>
-          `
+        ? config.studio
+          ? renderEntityButtonsEditor({
+              hass: this.hass,
+              enabled: config.show_switches === true,
+              entities: studioSetEntityIds(config.studio, peekStudioScenes(this.hass)),
+              hidden: hiddenEntityIds(config),
+              onEnabled: (enabled) =>
+                this._update({
+                  show_switches: enabled || undefined,
+                  hidden_entities: enabled ? config.hidden_entities : undefined,
+                }),
+              onVisible: (entityId, visible) =>
+                this._update({
+                  hidden_entities: toggleHiddenEntity(
+                    config.hidden_entities ?? [],
+                    entityId,
+                    visible,
+                    studioSetEntityIds(config.studio, peekStudioScenes(this.hass)),
+                  ),
+                }),
+            })
+          : html`
+              <div class="inline">
+                <span class="label">Show entity buttons</span>
+                <input
+                  type="checkbox"
+                  .checked=${Boolean(config.show_switches)}
+                  @change=${(ev: Event) =>
+                    this._update({ show_switches: this._checkboxChecked(ev) })}
+                />
+              </div>
+            `
         : nothing}
     `;
   }
@@ -723,8 +797,12 @@ export class StagedLightsCardEditor extends LitElement {
     return html`
       <div class="form">
         ${this._renderSharedFields()}
-        ${this._renderSteps()}
-        ${this._renderPage()}
+        ${this._config.studio
+          ? nothing
+          : html`
+              ${this._renderSteps()}
+              ${this._renderPage()}
+            `}
       </div>
     `;
   }
