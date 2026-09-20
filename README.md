@@ -1,75 +1,270 @@
-# Staged Switch Card
+# Hass Scene Studio
 
-![Staged Switch Card on a Home Assistant dashboard](images/staged-switch-card.png)
+![Room Switches on a Home Assistant dashboard](images/scene-studio-room-switches.png)
 
-A Home Assistant Lovelace card that combines several toggles into one staged control. Each position is a **stage**. Choosing a stage writes it to an `input_number` helper and turns the mapped entities on or off together.
+Hass Scene Studio is a Home Assistant Lovelace frontend for **scene-sets**: small bundles of exclusive [scenes](https://www.home-assistant.io/integrations/scene/) that remotes, dashboards, and automations call with `scene.turn_on`.
 
-The control looks like a progress bar, but it is a set of buttons — it is not a draggable slider. The leftmost **Power** button turns the whole group off or back on. Power off always turns every entity on the card off. The helper remembers only the last stage, not individual chip states.
+The plugin is one JavaScript module (`hass-scene-studio.js`) for [HACS](https://hacs.xyz/). It is **not** a Home Assistant add-on. After the resource loads, Scene Studio appears under **Settings → Dashboards** and can be shown in the sidebar.
 
-Use it when one control should represent a sequence, for example:
+In the card picker the package registers, in this order:
 
-- Pool pump → heater → lights
-- Hall light → reading lamp → accent lights
-- Fan low / medium / high using three switches
-- Irrigation zones that come on one after another
+| Picker name | Lovelace type | Role |
+| --- | --- | --- |
+| **Scene Studio - Scene-set** | `custom:scene-studio-card` | Bind a scene-set to a room dashboard |
+| **Scene Studio - Room Lights: Mini** | `custom:scene-studio-room-lights-mini-card` | Compact RGB / Warm / White control |
+| **Scene Studio - Room Lights: Advanced** | `custom:scene-studio-room-lights-card` | Full RGB / Warm / White control |
+| **Scene Studio - Room Switches** | `custom:scene-studio-room-switches-card` | Staged on/off control |
 
-The plugin is a single frontend file (`staged-switch-card.js`) for [HACS](https://hacs.xyz/). It ships **Scene Studio Card**, **Staged Switch Card**, **Staged Lights Card**, and **Staged Lights Mini Card**.
+Scene-set cards fill themselves from the scenes you saved in Scene Studio. The Room Lights and Room Switches cards can also be configured by hand with helpers if you are not using a scene-set.
 
-## How to use it
+- [Install](#install)
+- [Open Scene Studio](#open-scene-studio)
+- [Scene-sets](#scene-sets)
+- [Wizard](#wizard)
+- [Live edit](#live-edit)
+- [Dashboard cards](#dashboard-cards)
+- [Automations and remotes](#automations-and-remotes)
+- [Manual helper cards](#manual-helper-cards)
+- [Development](#development)
 
-You need three things: the plugin, a number helper for the current stage, and a list of entities to combine.
+## Install
 
-### 1. Install the plugin
-
-**HACS (recommended)**
+### HACS (recommended)
 
 1. Install [HACS](https://hacs.xyz/docs/setup/download) if needed.
 2. Open **HACS → Frontend**.
 3. Three-dot menu → **Custom repositories**.
 4. Add `https://github.com/raj47i/hass-staged-switch` and set the type to **Lovelace** / **Dashboard**.
-5. Install **Staged Switch Card**.
+5. Install **Hass Scene Studio**.
 6. Reload Lovelace resources (or restart Home Assistant) and refresh the browser.
 
-HACS downloads `staged-switch-card.js` from the GitHub release.
+HACS downloads `hass-scene-studio.js` from the GitHub release.
 
-**Manual**
+### Manual
 
-1. Copy `staged-switch-card.js` from a GitHub release (or `dist/` after `npm run build`) into `config/www/`.
+1. Copy `hass-scene-studio.js` from a GitHub release (or `dist/` after `npm run build`) into `config/www/`.
 2. Add a dashboard resource:
-   - URL: `/local/staged-switch-card.js`
+   - URL: `/local/hass-scene-studio.js`
    - Type: **JavaScript Module**
 
-While testing from this repo, use `npm run deploy` and point the resource at `/local/staged-switch-loader.js` instead. That loader reads a version stamp so you only need a browser refresh after each deploy, not a new resource URL.
+```yaml
+resources:
+  - url: /local/hass-scene-studio.js
+    type: module
+```
 
-### Scene Studio
+While testing from this repo, use `npm run deploy` and point the resource at `/local/scene-studio-loader.js`. That loader reads a version stamp so a browser refresh is enough after each deploy.
 
-This is a **frontend module**, not a Home Assistant add-on. After the JavaScript resource is loaded, Scene Studio appears as a dashboard under **Settings → Dashboards**. From there you can turn **Show in sidebar** on or off. The same checkbox is on the Scene Studio home page.
+Older dashboards that still load `staged-switch-card.js` or the previous card types keep working. `npm run migrate-ha` rewrites Lovelace **card types and resource URLs only**. It does not rename Home Assistant scenes (`ssl_`, `ssm_`, `sst_`, `sla_`).
 
-Open Scene Studio from the sidebar or Settings → Dashboards to create a **scene set** — a bundle of exclusive Home Assistant scenes. Pick a **Simple light scene set**, **Minimal light scene set**, **Advanced light scene set**, or **Switch scene set**. That page is the editor.
+## Open Scene Studio
 
-On a room dashboard, add **Scene Studio Card** and pick a scene set such as Guest Room lights. The card heading is that scene set’s name. Light scene sets become the mini lights card (RGB / Warm / White). Switch and advanced scene sets become the switch card. You can also add **Staged Lights Mini Card**, **Staged Lights Card**, or **Staged Switch Card** and pick the same scene set. The card fills itself from those scenes — no helpers or entity lists. Taps call `scene.turn_on`. RGB color and brightness still change live, like the original cards.
+After the JavaScript resource is loaded, Home Assistant creates a **Scene Studio** dashboard (`/scene-studio`). Open it from the sidebar or **Settings → Dashboards**. The same **Show in sidebar** checkbox is on the Scene Studio home page and in Settings → Dashboards.
 
-**Show entity buttons** is off on existing scene-set cards (the option was not stored before). Turn it on in the card editor to show every entity in the scene set under the controls — including entities that are not in a group. Those names start checked; uncheck one to hide its button. New entities added to the set later stay checked. The buttons wrap in even rows, same as the original staged cards.
+The home page lists every scene-set and offers four create buttons:
+
+| Kind | Label | Typical use |
+| --- | --- | --- |
+| Lights | **Lights scene-set : Simple** | RGB + Warm + White groups |
+| Lights | **Lights scene-set : Minimal** | RGB + one Whites group |
+| Lights | **Lights scene-set : Advanced** | Custom overlapping groups and extra looks |
+| Switches | **Switches scene-set** | Fans, heaters, and other on/off devices |
+
+Deleting a set asks for a delayed confirm (~800 ms) and then removes every Home Assistant scene in that set. Other slugs are left alone.
+
+## Scene-sets
+
+A scene-set is **not** a Home Assistant group. It is several real scenes that belong together. Only one look is meant to be on at a time. Tapping a look on the card calls `scene.turn_on` for that scene.
+
+Each set always starts with **Off / Default**: every member off. The other scenes are exclusive looks (RGB, Warm Min, a custom Movie look, and so on).
+
+### Shared rules
+
+- **Lights first, then switches.** A lights set can include `light` and `switch` entities. Color lights can belong to RGB and also to Warm or White.
+- **Add from an area or a device.** The picker adds every matching light and switch under that area or device. The same entity can sit in more than one group.
+- **Names come from Home Assistant.** Chip and review labels use the live friendly name.
+- **Brightness is 1–100%.** Off is a separate scene, never 0% brightness.
+- **New sets start all-off.** The first time stages are saved, every entity in every look is off until you live-edit. Existing scene-sets keep the on/off values already stored in Home Assistant.
+- **Membership survives offs.** Group members are stored on the scene so turning a light off in live edit does not drop it from the group on reload.
+- **Scenes are written in order.** Each step of the wizard can persist. Writes are sequential so later looks are not lost if Home Assistant is slow.
+- **Leftover looks are deleted** when you shrink a set (five Warm levels down to three, and so on). Growing a set does not delete anything.
+- **Each step has a URL**, for example `/scene-studio/studio/new/light/name` or `/scene-studio/studio/edit/switch/patio/entities`.
+
+### Scene id prefixes
+
+| Kind | Prefix | Example |
+| --- | --- | --- |
+| Lights : Simple | `ssl_` | `scene.ssl_living_off`, `scene.ssl_living_rgb`, `scene.ssl_living_w1` |
+| Lights : Minimal | `ssm_` | `scene.ssm_guest_off`, `scene.ssm_guest_t2` |
+| Lights : Advanced | `sla_` | `scene.sla_movie_00`, `scene.sla_movie_01` |
+| Switches | `sst_` | `scene.sst_patio_00`, `scene.sst_patio_01` |
+
+A named set can be saved before any entities are added. That writes a stub Off scene so the slug is reserved.
+
+### Lights scene-set : Simple
+
+Groups:
+
+1. **RGB** — color lights, one shared color and brightness, optional effect.
+2. **Warm** — 2–5 intensity levels. Two lights allow 2–3 levels; three or more allow 2–5. Default is three: **Min / Mid / Max**. Five levels are **Min / Low / Mid / High / Max**.
+3. **White** — same level counts and names as Warm.
+
+Warm uses hex `#ff8a1d`. White uses `#ffffff`. Only members of that group change on that look; everyone else stays off.
+
+Scene ids use the look slot: `off`, `rgb`, `w1`…`w5`, `n1`…`n5`.
+
+Wizard steps: **Name → Entities → Groups → Live edit → Finish**.
+
+### Lights scene-set : Minimal
+
+Same wizard as Simple, with two groups:
+
+1. **RGB**
+2. **Whites** — 2–4 levels:
+   - 2: **Min / Max** (Min is 20% warm)
+   - 3: **Warm / Neutral / White** (`#ff8a1d`, `#f3eadc`, `#ffffff`)
+   - 4: **Dim / Warm / Neutral / White**
+
+Scene ids use `off`, `rgb`, `t1`…`t4`.
+
+### Lights scene-set : Advanced
+
+Build your own groups. Groups can overlap. Each group has editable **level names** instead of a 2–5 dropdown.
+
+- Type names split by `|`. Default: `Min|Low|Mid|High|Max`.
+- Names become an ordered list (`0` = first name, `4` = fifth). Live-edit looks stay on that index when you rename a level.
+- If you change the order, looks follow the slots. That cannot be repaired afterwards.
+- Shrink five names to three and the last two looks are dropped.
+- Up to **7** names. An eighth name shows a warning and is ignored.
+- Spaces are allowed (`Soft low`) and trimmed. Card buttons ellipsize long labels — keep names short.
+
+You can also add **custom looks** that are not a group level (a mixed Movie look, for example). Off / Default is always first and is not live-edited.
+
+Scene ids are numbered: `sla_{slug}_00` (Off), then `_01`, `_02`, …
+
+Wizard steps: **Name → Entities → Groups → Live edit → Finish**.
+
+### Switches scene-set
+
+On/off snapshots for fans, heaters, outlets, and other toggles.
+
+A **new** set saves every stage all-off until you turn something on in the editor. That keeps large or powerful loads off while you pick the right mix.
+
+Existing sets that were saved as **cumulative** (stage 1 = first entity, stage 2 = first two, …) stay cumulative when you re-save. You can switch a set to an **explicit** mix if each stage needs its own on/off map.
+
+Wizard steps: **Name → Entities → Scenes → Finish**.
+
+Scene ids are numbered: `sst_{slug}_00` (Off), then `_01`, `_02`, …
+
+## Wizard
+
+Every kind starts on **Name** so the set can be saved at once. The slug becomes the scene id prefix. After that:
+
+| Step | Lights (all three) | Switches |
+| --- | --- | --- |
+| Entities | Add lights and switches. Area and device pickers available. | Same, on/off entities. |
+| Groups | Assign members to RGB / Warm / White, or custom Advanced groups. | — |
+| Scenes | — | Name stages and set on/off (new sets start off). |
+| Live edit | Tap a look, change members, Save. | — |
+| Finish | Review the exclusive scenes. | Review. |
+
+Leaving a step writes the current scenes. You can close the browser and reopen the set from the home list.
+
+## Live edit
+
+Live edit loads the **saved scene**, not a guessed default.
+
+1. The card (and the editor preview) turns **Off / Default** first, waits **0.5 s**, then applies the look. Going to Off skips the wait.
+2. **RGB color and brightness tweaks** on an already-on RGB look skip the Off flash so the lights do not blink.
+3. **Cancel** reloads the last saved scene. **Save** writes that look.
+4. Off / Default is listed first and stays out of the live-edit list — it is always all off.
+5. Only group members can turn on in that look. A Warm-only light cannot be forced on in the RGB scene.
+
+On first load, dashboard cards infer the current look from the live lights when they can, even if this browser last saved a different row.
+
+## Dashboard cards
+
+### Scene Studio - Scene-set
+
+Add this on a room dashboard and pick a scene-set. The card becomes:
+
+- **Room Lights: Mini** for Lights : Simple and Lights : Minimal
+- **Room Switches** for Switches and Lights : Advanced
+
+The heading defaults to the scene-set name (a trailing “lights” / “switches” is stripped). In the card editor you can change the title, clear it to hide the heading, and align it **Left / Middle / Right**. Alignment is disabled when the title is empty.
+
+**Show entity buttons** is off unless you turn it on. Existing cards that never stored the option stay unchecked. When it is on, every entity in the set is listed under the controls — including members that are not in a group. New entities added later start visible. Uncheck one to hide its button. Buttons wrap in even rows (at most 6 per row).
 
 ```yaml
 type: custom:scene-studio-card
 studio: guest_room
+title: Guest Room
+title_align: center
 show_switches: true
 hidden_entities:
   - light.guest_spare
 ```
 
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `type` | string | | `custom:scene-studio-card` |
+| `studio` | string | | Scene-set slug. Empty shows every set’s control |
+| `title` | string | scene-set name | Heading. Clear it to hide |
+| `title_align` | string | `left` | `left`, `center` (`middle`), or `right` |
+| `show_switches` | boolean | off | Show entity buttons under the control |
+| `hidden_entities` | list | | Entity ids hidden when `show_switches` is on |
+
+You can add Room Lights: Mini or Room Switches yourself and set the same `studio` slug. The card still fills rows and stages from those scenes — no helpers required.
+
+### Scene Studio - Room Lights: Mini
+
+Two rows:
+
+1. **Mode** — RGB, Warm, and White (only the rows you configured). Tap the active mode to turn it off; tap again or another mode to turn that one on.
+2. **Controls** — RGB shows brightness (1–100%), presets, and the color picker. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
+
+On a scene-set card, **Show entity buttons** is available and off until you enable it. A mini card configured only with helpers has no chip option.
+
 ```yaml
-resources:
-  - url: /local/staged-switch-card.js
-    type: module
+type: custom:scene-studio-room-lights-mini-card
+studio: guest_room
+title: Guest Room
+title_align: left
 ```
 
-### 2. Create the stage helper
+### Scene Studio - Room Lights: Advanced
 
-The current stage is stored in an `input_number`. Create it under **Settings → Devices & services → Helpers → Create helper → Number**, or in YAML.
+The same RGB / Warm / White lighting as three exclusive rows. Used as a **manual** card with an `input_text` helper, or bound with `studio:` to a Simple/Minimal set if you want the full row layout instead of Mini.
 
-Set `min` to `0`, `step` to `1`, and `max` to the last stage index. The card shows at most **5 stages besides Power**. Extra entities can still be on the card as chips.
+Only one of RGB, Warm, or White can be on. Entity chips stay hidden unless **Show entity buttons** is on; then they sit together at the bottom.
+
+### Scene Studio - Room Switches
+
+Staged Power + look buttons. Bound to a Switches or Advanced lights scene-set, or configured by hand with an `input_number` helper (see [Manual helper cards](#manual-helper-cards)).
+
+Taps on a scene-set card call `scene.turn_on`. The leftmost **Power** button is Off / Default.
+
+## Automations and remotes
+
+Scene-sets are ordinary Home Assistant scenes. Point a Pico, Hue button, or automation at a scene id:
+
+```yaml
+action: scene.turn_on
+target:
+  entity_id: scene.ssl_living_w2
+```
+
+Do not wrap the set in a group. Each look is already exclusive.
+
+## Manual helper cards
+
+These cards still work without Scene Studio. Use them when you want the control but not Home Assistant scenes.
+
+### Room Switches with a helper
+
+You need the plugin, an `input_number` for the current stage, and the entities to combine.
+
+Create the helper under **Settings → Devices & services → Helpers → Create helper → Number**. Set `min` to `0`, `step` to `1`, and `max` to the last stage index. The card shows at most **5 stages besides Power**. Extra entities can still appear as chips.
 
 For three devices in cumulative mode there are **four** helper values (Off plus one per device), so `max` is `3`:
 
@@ -92,28 +287,14 @@ input_number:
 
 If `min` is not `0`, the card still maps stage buttons onto that range when it writes `input_number.set_value`.
 
-### 3. Add the card to a dashboard
-
-1. Edit the dashboard → **Add card**.
-2. Choose **Custom: Staged Switch Card** (or paste YAML).
-3. Pick the helper in **Stage helper**.
-4. Add the entities you want to combine (see below).
-5. Save.
-
-You can also open **Show code editor** and paste any of the examples in this README.
-
-## Combine multiple entities
-
-The card has two ways to group entities. Use **cumulative** when later stages should keep earlier ones on. Use **explicit stages** when each position needs its own on/off mix.
-
 The editor accepts `switch`, `light`, `fan`, and `input_boolean` entities that have On/Off. Sensors, diagnostics, and hidden or disabled entities are skipped.
 
-### Cumulative: stack entities in order
+#### Cumulative: stack entities in order
 
-This is the usual “combination” setup. List the entities in the order they should come on. Stage `0` turns **all of them off**. Each higher stage turns on one more entity and leaves the earlier ones on.
+List entities in the order they should come on. Stage `0` turns all of them off. Each higher stage turns on one more entity and leaves the earlier ones on.
 
 ```yaml
-type: custom:staged-switch-card
+type: custom:scene-studio-room-switches-card
 title: Patio
 entity: input_number.patio_stage
 power_entity: input_boolean.patio_power
@@ -131,8 +312,6 @@ switches:
     name: Heater
 ```
 
-What that combination does:
-
 | Stage | Label | Fan | String lights | Heater |
 | --- | --- | --- | --- | --- |
 | 0 | Off | off | off | off |
@@ -140,12 +319,12 @@ What that combination does:
 | 2 | String lights | on | on | off |
 | 3 | Heater | on | on | on |
 
-Stage names are independent of the entities. Set them with `stage_names`, or in the editor under **Stage names**. A switch `name` is only used as the entity button tooltip.
+Stage names are independent of the entities. A switch `name` is only the entity button tooltip.
 
-Shorthand if you do not need custom labels:
+Shorthand:
 
 ```yaml
-type: custom:staged-switch-card
+type: custom:scene-studio-room-switches-card
 entity: input_number.patio_stage
 switches:
   - switch.patio_fan
@@ -155,12 +334,10 @@ switches:
 
 You can list more than five entities. The card still shows only five stage buttons; extra entities stay available as chips and are included when Power turns everything off.
 
-### Explicit: any on/off mix per stage
-
-Use this when the combination is not “each new stage keeps the previous ones on”. Every stage lists the target state for each entity.
+#### Explicit: any on/off mix per stage
 
 ```yaml
-type: custom:staged-switch-card
+type: custom:scene-studio-room-switches-card
 title: Living room
 entity: input_number.living_scene
 stages:
@@ -182,94 +359,20 @@ stages:
       light.reading: off
       light.cabinet: on
       switch.soundbar: on
-  - name: Evening
-    switches:
-      light.sofa: on
-      light.reading: off
-      light.cabinet: on
-      switch.soundbar: on
 ```
 
-| Stage | Label | Sofa | Reading | Cabinet | Soundbar |
-| --- | --- | --- | --- | --- | --- |
-| 0 | All off | off | off | off | off |
-| 1 | Reading | off | on | off | off |
-| 2 | Movie | off | off | on | on |
-| 3 | Evening | on | off | on | on |
-
-Set the helper `max` to the last stage index (`3` in this example).
-
-You can write each stage as a list instead of a map:
-
-```yaml
-stages:
-  - name: Movie
-    switches:
-      - entity: light.cabinet
-        state: "on"
-      - entity: switch.soundbar
-        state: "on"
-      - entity: light.sofa
-        state: "off"
-      - entity: light.reading
-        state: "off"
-```
-
-List every entity you care about on **every** stage. When a stage is applied, roster entities that are omitted from that stage are turned off. Power off also turns every card entity off, including hidden chips.
+You can write each stage as a list instead of a map. List every entity you care about on **every** stage. Roster entities omitted from a stage are turned off. Power off also turns every card entity off, including hidden chips.
 
 If both `stages` and `switches` are set, `stages` wins for the stage map. `switches` is still used for chip order, names, and `hide`.
 
-### Several independent combinations
+One card is one combination (one helper, one set of entities). For two rooms, add two helpers and two cards. Give each card its own `input_number`.
 
-One card is one combination (one helper, one set of entities). For two groups, add two helpers and two cards:
+A single combination can mix domains. The card calls `homeassistant.turn_on` / `turn_off` on whatever you list.
 
-```yaml
-# Card 1 — upstairs
-type: custom:staged-switch-card
-title: Upstairs
-entity: input_number.upstairs_stage
-switches:
-  - light.hall
-  - light.landing
-  - light.bedroom
-
-# Card 2 — downstairs
-type: custom:staged-switch-card
-title: Downstairs
-entity: input_number.downstairs_stage
-switches:
-  - light.kitchen
-  - light.dining
-  - switch.dining_fan
-```
-
-Give each card its own `input_number` so the stages do not fight.
-
-### Mix entity domains in one card
-
-A single combination can include different domains. The card calls `homeassistant.turn_on` / `turn_off` on whatever you list:
+If automations already listen to the helper, keep the stage control on the card but do not let the card touch the entities:
 
 ```yaml
-type: custom:staged-switch-card
-title: Workshop
-entity: input_number.workshop_stage
-switches:
-  - entity: switch.workshop_outlets
-    name: Power
-  - entity: light.workshop_overhead
-    name: Lights
-  - entity: fan.workshop_exhaust
-    name: Exhaust
-  - entity: input_boolean.workshop_occupied
-    name: Occupied
-```
-
-### Let an automation own the switches
-
-If you already have automations that listen to the helper, keep the stage control on the card but do not let the card touch the entities:
-
-```yaml
-type: custom:staged-switch-card
+type: custom:scene-studio-room-switches-card
 title: Irrigation
 entity: input_number.irrigation_zone
 direct_control: false
@@ -280,85 +383,74 @@ stages:
   - name: Drip
 ```
 
-The card only updates the helpers. Your automation decides what turns on.
+#### Visual editor
 
-## Visual editor
-
-1. Edit the dashboard and add **Staged Switch Card**, or click **Edit** on an existing card.
+1. Add **Scene Studio - Room Switches**, or click **Edit** on an existing card.
 2. Set the title, the `input_number` stage helper, and an optional `input_boolean` power helper.
-3. On **1. Entities**, add lights, fans, and switches. You can pick an area or a device to add every matching On/Off entity under it.
+3. On **1. Entities**, add lights, fans, and switches. Pick an area or a device to add every matching On/Off entity under it.
 4. Use **Hide from card** if a relay should follow the stages but not show as a chip.
 5. On **2. Stages**, choose **Cumulative switches** or **Explicit stage map**.
-6. Edit **Stage names** so each combination has its own label (Fan / Heater, and so on). The Power button label is always **Power**.
-7. In explicit mode, set each row to **On** or **Off** for that stage.
+6. Edit **Stage names**. The Power button label is always **Power**.
+7. In explicit mode, set each row to **On** or **Off**.
 8. Use the checkboxes to show or hide entity buttons and stage labels, or to disable direct switch control.
 
-YAML is still available from **Show code editor**.
-
-## Configuration reference
+#### Room Switches options
 
 | Option | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `type` | string | yes | | `custom:staged-switch-card` |
-| `title` | string | no | `Staged Switch Control` | Card heading |
-| `entity` | string | recommended | | `input_number` that stores the current stage |
-| `power_entity` | string | no | | Optional `input_boolean` that stores group on/off. The stage helper keeps the last stage when the group is off |
-| `switches` | list | no | | Entities to combine in order. Stage `0` is all off; stage _n_ turns on the first _n_ items, up to 5 stages |
-| `stages` | list | no | | Explicit per-stage on/off map. Overrides `switches` for the stage map when present |
-| `stage_names` | list | no | | Labels for each stage combination (index `0` is Off) |
-| `studio` | string | no | | Scene Studio set slug. Stages come from that scene set |
-| `direct_control` | boolean | no | `true` | `true`: card turns entities on/off. `false`: only updates the helpers |
-| `show_switches` | boolean | no | `true` | Show a chip for each visible entity. Scene-set cards default this to off |
-| `hidden_entities` | list | no | | Entity ids hidden from the chip row when `show_switches` is on |
-| `show_stage_labels` | boolean | no | `true` | Show the muted stage names under the buttons |
+| `type` | string | yes | | `custom:scene-studio-room-switches-card` |
+| `title` | string | no | `Room Switches` | Card heading. Clear it to hide |
+| `title_align` | string | no | `left` | `left`, `center`, or `right` |
+| `entity` | string | recommended | | `input_number` for the current stage |
+| `power_entity` | string | no | | Optional `input_boolean` for group on/off |
+| `switches` | list | no | | Entities in order. Stage `0` is all off |
+| `stages` | list | no | | Explicit per-stage on/off map |
+| `stage_names` | list | no | | Labels (index `0` is Off) |
+| `studio` | string | no | | Scene-set slug. Stages come from that set |
+| `direct_control` | boolean | no | `true` | `false`: only update helpers |
+| `show_switches` | boolean | no | `true` | Show a chip per visible entity. Scene-set cards default this to off |
+| `hidden_entities` | list | no | | Entity ids hidden from the chip row |
+| `show_stage_labels` | boolean | no | `true` | Muted names under the buttons |
 
-Provide at least one of `entity`, `switches`, or `stages`.
+Provide at least one of `entity`, `switches`, or `stages`. Limits: **5 stages** besides Power, on one row. **6 entity chips** per row; extras wrap and are split evenly (7 → 4+3).
 
-Limits: **5 stages** besides Power, on one row. **6 entity chips** per row; extra chips wrap and are split evenly (7 → 4+3).
-
-### `switches` item
+`switches` item:
 
 ```yaml
 - entity: switch.patio_fan   # required
-  name: Fan                  # optional entity chip tooltip
+  name: Fan                  # optional chip tooltip
   icon: mdi:fan              # optional
-  hide: true                 # optional; still controlled, not shown as a chip
+  hide: true                 # still controlled, not shown
 ```
 
 Or just `switch.patio_fan`.
 
-### `stages` item
+`stages` item:
 
 ```yaml
-- name: Evening              # optional
-  switches:                  # map or list of entity + on/off
+- name: Evening
+  switches:
     light.sofa: on
     switch.soundbar: on
 ```
 
-## How the control behaves
+#### How the control behaves
 
-1. The leftmost **Power** button turns the group on or off. Turning it off turns every card entity off and leaves the last stage in the helper (and in this browser) so turning it back on restores that stage.
-2. Only the Power button and the stage buttons (or their labels) change the group. Clicks on the bar around them do nothing.
-3. Choosing a stage writes `input_number.set_value` (and the optional power helper), then applies that stage’s on/off mix when `direct_control` is enabled. Roster entities omitted from the stage are turned off.
-4. The entity chips under the bar toggle that one entity. If the new mix is not a configured stage, the progress stays put. If it matches a stage, the bar (and power) update to that stage.
-5. Individual chip toggles are not remembered across Power off. Memory is the last stage only.
+1. **Power** turns the group on or off. Off turns every card entity off and leaves the last stage in the helper (and in this browser) so Power on restores that stage.
+2. Only Power and the stage buttons (or their labels) change the group. Clicks on the bar around them do nothing.
+3. Choosing a stage writes `input_number.set_value` (and the optional power helper), then applies that mix when `direct_control` is on. Omitted roster entities are turned off.
+4. Entity chips toggle that one entity. If the new mix is not a configured stage, the progress stays put. If it matches a stage, the bar updates.
+5. Chip toggles are not remembered across Power off. Memory is the last stage only.
 
 `direct_control: false` still updates the helpers, but the card will not turn entities on or off.
 
-## Staged Lights Card
+### Room Lights: Advanced with a helper
 
-A lights card with three exclusive rows:
+Three exclusive rows, stored in **one** `input_text` as a short JSON string:
 
-1. **RGB** — Power button labeled RGB, a 1–100% brightness slider with the percent to the right (always visible, above the custom color picker), then a row of quick color presets. Only RGB-capable lights can be added here.
-2. **Warm** — Power button labeled Warm, plus intensity stages. Needs at least two lights or switches or the whole row stays hidden. Two entities allow 2–3 stages. Three or more entities allow 2–5 stages. Names are **Min / Low / Mid / High / Max** (Min and Max always stay; the middle names appear as you add stages). Each stage is an on/off mix, same as Staged Switch.
-3. **White / sun** — the same stage limits, names, and per-light on/off setup. Also hidden with fewer than two entities.
-
-Only one of RGB, Warm, or White can be on at a time. Entity chips stay hidden unless you turn on **Show entity buttons**. Then they sit together at the bottom, not per row. The card has no heading of its own — put a Heading card above it if you want a room name.
-
-The editor is two groups of pages, like Staged Switch: first pick RGB, Warm, and White entities, then set each group up. RGB setup chooses the default color swatches and on/off button icons. Warm and White setup choose on/off icons, a stage icon, and which lights are on at each intensity.
-
-All of that state is stored in **one** `input_text` helper as a short JSON string. You do not create a helper per slider.
+1. **RGB** — Power labeled RGB, a 1–100% brightness slider, then color presets. Only RGB-capable lights.
+2. **Warm** — at least two lights or switches or the row stays hidden. Two entities allow 2–3 stages; three or more allow 2–5. Names are **Min / Low / Mid / High / Max**. Each stage is an on/off mix.
+3. **White** — the same limits and names.
 
 ```yaml
 input_text:
@@ -368,7 +460,7 @@ input_text:
 ```
 
 ```yaml
-type: custom:staged-lights-card
+type: custom:scene-studio-room-lights-card
 entity: input_text.living_lights
 rgb:
   - light.sofa_rgb
@@ -379,74 +471,53 @@ warm:
 white:
   - light.ceiling
   - light.desk
-warm_stages:
-  - switches:
-      light.floor_lamp: on
-      light.reading: off
-  - switches:
-      light.floor_lamp: on
-      light.reading: on
-white_stages:
-  - switches:
-      light.ceiling: on
-      light.desk: off
-  - switches:
-      light.ceiling: on
-      light.desk: on
 ```
 
-If you omit `warm_stages` / `white_stages`, each intensity is cumulative: Min turns the first light on, the next stage adds the next light, and Max turns the whole row on. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Mid / Max. Three or more default to all five names.
+If you omit `warm_stages` / `white_stages`, each intensity is cumulative. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Mid / Max. Three or more default to all five names.
 
-The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1},"l":"r"}`. `l` is the last RGB / Warm / White mode (`r`, `w`, or `n`), so Power can restore it after everything is off. If the helper is missing, the card still remembers the last values in this browser.
+The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1},"l":"r"}`. `l` is the last RGB / Warm / White mode. If the helper is missing, the card still remembers the last values in this browser.
 
 Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
 
-RGB, Warm, and White always turn their lights on and off. **Show entity buttons** is off by default. Turn it on to show every entity once at the bottom; those buttons always toggle the entity.
+RGB, Warm, and White always turn their lights on and off. **Show entity buttons** is off by default.
 
 | Option | Type | Required | Description |
 | --- | --- | --- | --- |
-| `type` | string | yes | `custom:staged-lights-card` |
-| `studio` | string | no | Scene Studio set slug. Rows and stages come from that scene set |
+| `type` | string | yes | `custom:scene-studio-room-lights-card` |
+| `title` | string | no | Heading. Clear it to hide |
+| `title_align` | string | no | `left`, `center`, or `right` |
+| `studio` | string | no | Scene-set slug. Rows and stages come from that set |
 | `entity` | string | recommended | `input_text` that stores the JSON state |
-| `stages` | number | no | Fallback stage count when a row has no map yet. Still clamped per row: 2 lights → max 3, 3+ lights → max 5 |
-| `rgb` | list | no | RGB-capable lights for the color row |
-| `warm` | list | no | Lights or switches for the Warm row. Row is hidden with fewer than 2 |
-| `white` | list | no | Lights or switches for the White row. Row is hidden with fewer than 2 |
-| `warm_stages` | list | no | Per-intensity on/off map for Warm. Length is that row’s stage count (2–5). Same `switches` shape as Staged Switch, plus optional `icon` |
-| `white_stages` | list | no | Per-intensity on/off map for White. Independent of Warm |
-| `rgb_presets` | list | no | Hex swatches on the RGB row. Defaults to the built-in 8 colors |
+| `stages` | number | no | Fallback stage count when a row has no map yet |
+| `rgb` | list | no | RGB-capable lights |
+| `warm` | list | no | Lights or switches. Hidden with fewer than 2 |
+| `white` | list | no | Lights or switches. Hidden with fewer than 2 |
+| `warm_stages` | list | no | Per-intensity on/off map (2–5) |
+| `white_stages` | list | no | Independent of Warm |
+| `rgb_presets` | list | no | Hex swatches. Defaults to the built-in 8 colors |
 | `rgb_icons` | map | no | `{ on, off }` MDI icons for the RGB power button |
-| `warm_icons` | map | no | `{ on, off }` icons for the Warm power button |
-| `white_icons` | map | no | `{ on, off }` icons for the White power button |
-| `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom. Those buttons always toggle the entity |
-| `hidden_entities` | list | no | Entity ids hidden from the chip row when `show_switches` is on |
+| `warm_icons` | map | no | `{ on, off }` for Warm |
+| `white_icons` | map | no | `{ on, off }` for White |
+| `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom |
+| `hidden_entities` | list | no | Hidden when `show_switches` is on |
 
-RGB items must be color lights. Warm/White items are a light or switch entity id, or `{ entity, name, icon, hide }` like Staged Switch.
+RGB items must be color lights. Warm/White items are a light or switch id, or `{ entity, name, icon, hide }`.
 
-## Staged Lights Mini Card
+### Room Lights: Mini with a helper
 
-The same RGB / Warm / White lighting, in two rows. On a scene-set card you can turn on **Show entity buttons**; a manual mini card still has no chip option.
-
-1. **Mode group** — RGB, Warm, and White (only the rows you configured). Tapping the active mode turns it off; tapping it again, or another mode, turns that one on. The last mode is stored in the helper, so row 2 reloads from it.
-2. **Controls** — RGB shows brightness, presets, and the color picker. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
-
-It uses the same `input_text` JSON helper. You can point both lights cards at the same helper if you want a compact control and a full control for the same room.
+Point it at the same `input_text` as the Advanced lights card if you want both layouts for one room.
 
 ```yaml
-type: custom:staged-lights-mini-card
+type: custom:scene-studio-room-lights-mini-card
 entity: input_text.living_lights
 rgb:
   - light.sofa_rgb
-  - light.cabinet_rgb
 warm:
   - light.floor_lamp
   - light.reading
-white:
-  - light.ceiling
-  - light.desk
 ```
 
-The editor is the same multipage RGB / Warm / White setup as Staged Lights. On a scene-set card, **Show entity buttons** is available and off unless you turn it on. Manual mini cards still hide that option.
+The editor is the same multipage RGB / Warm / White setup as Room Lights: Advanced.
 
 ## Development
 
@@ -459,26 +530,26 @@ npm run preview
 npm run deploy
 ```
 
-`npm test` runs the unit tests. `npm run watch` rebuilds `dist/staged-switch-card.js` as you edit. `npm run preview` serves this folder at [http://localhost:4173](http://localhost:4173). Open `preview.html` for the dashboard cards, or `studio.html` for **Scene Studio** (scenes are mocked in the browser). `npm run deploy` copies the bundle to Home Assistant at `ha:/config/www/`. After a refresh, Scene Studio is created under **Settings → Dashboards** and can be shown in the sidebar.
+`npm test` runs the unit tests. `npm run watch` rebuilds `dist/hass-scene-studio.js`. `npm run preview` serves this folder at [http://localhost:4173](http://localhost:4173). Open `preview.html` for the dashboard cards, or `studio.html` for Scene Studio (scenes are mocked in the browser). `npm run deploy` copies the bundle to Home Assistant at `ha:/config/www/` under both the current names and the previous `staged-switch-*` filenames.
 
 Layout:
 
-- `src/shared/` — helpers reused by every card in this package
-- `src/cards/staged-switch/` — staged switch card
-- `src/cards/staged-lights/` — staged lights card
-- `src/cards/staged-lights-mini/` — compact two-row lights card
-- `src/studio/` — Scene Studio: create and edit scene sets (simple, minimal, advanced, switch)
-- `src/index.ts` — bundle entry; import another card module here to add it
+- `src/shared/` — helpers reused by every card
+- `src/cards/staged-switch/` — Room Switches
+- `src/cards/staged-lights/` — Room Lights: Advanced
+- `src/cards/staged-lights-mini/` — Room Lights: Mini
+- `src/studio/` — Scene Studio editor and Scene-set card
+- `src/index.ts` — bundle entry
 
 Requirements: Node.js 20 or newer.
 
-## Publishing a HACS release
+### Publishing a HACS release
 
-HACS loads `staged-switch-card.js` from GitHub release assets (`hacs.json`).
+HACS loads `hass-scene-studio.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.7-beta`.
-3. Push the tag. The release workflow builds the bundle and attaches `staged-switch-card.js`.
+2. Commit and tag, for example `v0.0.8-beta`.
+3. Push the tag. The release workflow builds the bundle and attaches `hass-scene-studio.js`.
 
 ## License
 

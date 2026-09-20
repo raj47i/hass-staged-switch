@@ -40,6 +40,12 @@ import {
   withTimeout,
 } from "./hass";
 import {
+  rewriteLegacyIds,
+  ROOM_LIGHTS_MINI_CARD,
+  ROOM_SWITCHES_CARD,
+  storageKeyAliases,
+} from "./card-ids";
+import {
   cardStorageKey,
   readStoredNumber,
   readStoredOnOff,
@@ -48,6 +54,11 @@ import {
 } from "./persist";
 import { SerialActionQueue } from "./queue";
 import { registerLovelaceCard } from "./register";
+import {
+  normalizeTitleAlign,
+  storedTitleAlign,
+  titleAlignStyle,
+} from "./title";
 import type { HomeAssistant } from "./types";
 
 const hassStub = (
@@ -58,6 +69,21 @@ const hassStub = (
   callService: async () => undefined,
   states: {},
   ...patch,
+});
+
+describe("title alignment", () => {
+  it("normalizes left as the default and maps middle to center", () => {
+    expect(normalizeTitleAlign(undefined)).toBe("left");
+    expect(normalizeTitleAlign("left")).toBe("left");
+    expect(normalizeTitleAlign("center")).toBe("center");
+    expect(normalizeTitleAlign("middle")).toBe("center");
+    expect(normalizeTitleAlign("right")).toBe("right");
+    expect(storedTitleAlign("left")).toBeUndefined();
+    expect(storedTitleAlign("center")).toBe("center");
+    expect(titleAlignStyle(undefined)).toBe("");
+    expect(titleAlignStyle("middle")).toBe("text-align:center");
+    expect(titleAlignStyle("right")).toBe("text-align:right");
+  });
 });
 
 describe("entity display names", () => {
@@ -191,6 +217,50 @@ describe("persist helpers", () => {
     });
     expect(readStoredOnOff("k")).toBeUndefined();
     expect(readStoredNumber("k")).toBeUndefined();
+  });
+
+  it("reads browser state saved under the previous card ids", () => {
+    const store = new Map<string, string>([
+      ["staged-switch-card:patio:power", "on"],
+      ["staged-switch-card:patio:stage", "2"],
+    ]);
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+    });
+    const key = cardStorageKey(ROOM_SWITCHES_CARD, "patio");
+    expect(storageKeyAliases(key)).toContain("staged-switch-card:patio");
+    expect(readStoredOnOff(key)).toBe(true);
+    expect(readStoredNumber(key)).toBe(2);
+  });
+});
+
+describe("legacy id rewrites", () => {
+  it("updates card types and resources without touching scenes or images", () => {
+    const source = [
+      "type: custom:staged-switch-card",
+      "type: custom:staged-lights-card",
+      "type: custom:staged-lights-mini-card",
+      "url: /local/staged-switch-loader.js",
+      "scene.ssl_guest_off",
+      "scene.sst_patio_00",
+      "images/staged-switch-card.png",
+    ].join("\n");
+    const next = rewriteLegacyIds(source);
+    expect(next).toContain(`custom:${ROOM_SWITCHES_CARD}`);
+    expect(next).toContain("custom:scene-studio-room-lights-card");
+    expect(next).toContain(`custom:${ROOM_LIGHTS_MINI_CARD}`);
+    expect(next).toContain("/local/scene-studio-loader.js");
+    expect(next).toContain("scene.ssl_guest_off");
+    expect(next).toContain("scene.sst_patio_00");
+    expect(next).toContain("images/staged-switch-card.png");
+    expect(next).not.toContain("custom:staged-switch-card");
+    expect(next).not.toContain("custom:staged-lights-mini-card");
   });
 });
 

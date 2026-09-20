@@ -184,18 +184,18 @@ describe("lights JSON state", () => {
 describe("intensity stages", () => {
   it("caps stages by entity count and names Min through Max", () => {
     const two = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       warm: ["light.floor", "light.reading"],
     };
     const many = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       warm: ["light.a", "light.b", "light.c"],
       white: ["light.x", "light.y"],
     };
     expect(maxRowStages(two, "warm")).toBe(3);
     expect(maxRowStages(many, "warm")).toBe(5);
     expect(maxRowStages(many, "white")).toBe(3);
-    expect(maxRowStages({ type: "custom:staged-lights-card", warm: ["light.only"] }, "warm")).toBe(
+    expect(maxRowStages({ type: "custom:scene-studio-room-lights-card", warm: ["light.only"] }, "warm")).toBe(
       0,
     );
     expect(lightsStageCount(two, "warm")).toBe(3);
@@ -231,7 +231,7 @@ describe("intensity stages", () => {
 
   it("turns Warm/White stages into a per-light on/off mix", () => {
     const config = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       stages: 3,
       warm: ["light.floor", "light.reading", "switch.sconce"],
     };
@@ -254,7 +254,7 @@ describe("intensity stages", () => {
 
   it("uses an explicit Warm/White map and keeps omitted roster lights off", () => {
     const config = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       stages: 2,
       warm: ["light.floor", "light.reading", "switch.sconce"],
       warm_stages: [
@@ -296,17 +296,17 @@ describe("intensity stages", () => {
 describe("look", () => {
   it("keeps default RGB swatches unless valid presets are set", () => {
     expect(resolveRgbPresets(undefined)).toHaveLength(8);
-    expect(resolveRgbPresets({ type: "custom:staged-lights-card", rgb_presets: ["nope"] })).toEqual(
+    expect(resolveRgbPresets({ type: "custom:scene-studio-room-lights-card", rgb_presets: ["nope"] })).toEqual(
       resolveRgbPresets(undefined),
     );
     expect(
-      resolveRgbPresets({ type: "custom:staged-lights-card", rgb_presets: ["#fff", "2196f3"] }),
+      resolveRgbPresets({ type: "custom:scene-studio-room-lights-card", rgb_presets: ["#fff", "2196f3"] }),
     ).toEqual(["#ffffff", "#2196f3"]);
   });
 
   it("resolves on/off and stage icons with fallbacks", () => {
     const config = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       rgb_icons: { on: "mdi:palette", off: "mdi:palette-outline" },
       warm_stages: [{ icon: "mdi:weather-night", switches: { "light.a": "on" } }],
     };
@@ -326,24 +326,24 @@ describe("look", () => {
 describe("lights roster", () => {
   it("reads each row and shows every visible entity once", () => {
     const config = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       entity: "input_text.living_lights",
       rgb: ["light.rgb_1"],
       warm: [{ entity: "switch.sconce", hide: true }],
       white: ["", { entity: "" }, "light.ceiling"],
     };
     expect(rowRoster(config, "rgb").map((item) => item.entity)).toEqual(["light.rgb_1"]);
-    expect(isEmptyLightsConfig({ type: "custom:staged-lights-card" })).toBe(true);
+    expect(isEmptyLightsConfig({ type: "custom:scene-studio-room-lights-card" })).toBe(true);
     expect(isEmptyLightsConfig(undefined)).toBe(true);
     expect(isLightsCardConfig(undefined)).toBe(false);
     expect(isLightsCardConfig(null)).toBe(false);
     expect(isLightsCardConfig([])).toBe(false);
     expect(isLightsCardConfig("nope")).toBe(false);
-    expect(isLightsCardConfig({ type: "custom:staged-lights-card" })).toBe(true);
+    expect(isLightsCardConfig({ type: "custom:scene-studio-room-lights-card" })).toBe(true);
     expect(isEmptyLightsConfig(config)).toBe(false);
     expect(
       isEmptyLightsConfig({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         warm: ["light.only"],
       }),
     ).toBe(true);
@@ -359,7 +359,7 @@ describe("lights roster", () => {
 
   it("dedupes shared entities and hides incomplete Warm/White rows", () => {
     const config = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       rgb: ["light.shared"],
       warm: ["light.shared", "light.sconce"],
       white: ["light.only"],
@@ -389,27 +389,27 @@ describe("edge cases", () => {
     expect(intensityName(0, 3)).toBe("Min");
     expect(intensityName(99, 3)).toBe("Max");
     expect(lightsStageCount(undefined)).toBe(3);
-    expect(lightsStageCount({ type: "custom:staged-lights-card", stages: 0 })).toBe(3);
-    expect(configuredRows({ type: "custom:staged-lights-card", rgb: ["light.a"] })).toEqual(["rgb"]);
+    expect(lightsStageCount({ type: "custom:scene-studio-room-lights-card", stages: 0 })).toBe(3);
+    expect(configuredRows({ type: "custom:scene-studio-room-lights-card", rgb: ["light.a"] })).toEqual(["rgb"]);
     expect(
       configuredRows({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         warm: ["light.only"],
         white: ["light.a", "light.b"],
       }),
     ).toEqual(["white"]);
-    expect(rowIsConfigured({ type: "custom:staged-lights-card", warm: ["light.a"] }, "warm")).toBe(
+    expect(rowIsConfigured({ type: "custom:scene-studio-room-lights-card", warm: ["light.a"] }, "warm")).toBe(
       false,
     );
     expect(
       rowIsConfigured(
-        { type: "custom:staged-lights-card", warm: ["light.a", "light.b"] },
+        { type: "custom:scene-studio-room-lights-card", warm: ["light.a", "light.b"] },
         "warm",
       ),
     ).toBe(true);
     expect(
       visibleLights({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         warm: ["light.a", "light.b"],
         white: ["light.only"],
       }).map((item) => item.entity),
@@ -429,7 +429,7 @@ describe("edge cases", () => {
 
   it("ignores junk YAML lists, icons, and stage maps", () => {
     const junk = {
-      type: "custom:staged-lights-card",
+      type: "custom:scene-studio-room-lights-card",
       rgb: "light.sofa",
       warm: null,
       white: [{ entity: null }, "light.ceiling", null],
@@ -467,13 +467,13 @@ describe("edge cases", () => {
 
   it("sizes the card for empty, RGB-only, and chip layouts", () => {
     expect(lightsLayoutRows(undefined)).toBe(4);
-    expect(lightsLayoutRows({ type: "custom:staged-lights-card" })).toBe(4);
+    expect(lightsLayoutRows({ type: "custom:scene-studio-room-lights-card" })).toBe(4);
     expect(
-      lightsLayoutRows({ type: "custom:staged-lights-card", rgb: ["light.sofa"] }),
+      lightsLayoutRows({ type: "custom:scene-studio-room-lights-card", rgb: ["light.sofa"] }),
     ).toBe(3);
     expect(
       lightsLayoutRows({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         rgb: ["light.sofa"],
         warm: ["light.a", "light.b"],
         white: ["light.x", "light.y", "light.z"],
@@ -481,14 +481,14 @@ describe("edge cases", () => {
     ).toBe(5);
     expect(
       lightsLayoutRows({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         rgb: ["light.sofa"],
         show_switches: true,
       }),
     ).toBe(4);
     expect(
       lightsLayoutRows({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         rgb: ["light.sofa"],
         show_switches: false,
       }),
@@ -512,7 +512,7 @@ describe("edge cases", () => {
         },
       },
     });
-    const key = lightsStorageKey({ type: "custom:staged-lights-card", entity: "input_text.room" });
+    const key = lightsStorageKey({ type: "custom:scene-studio-room-lights-card", entity: "input_text.room" });
     writeStoredLightsState(key, {
       rgb: { on: false, brightness: 90, hex: "#ffffff" },
       warm: { on: true, stage: 2 },
@@ -551,18 +551,18 @@ describe("edge cases", () => {
         },
       },
     });
-    const key = lightsStorageKey({ type: "custom:staged-lights-card", entity: "input_text.room" });
-    expect(key).toBe("staged-lights-card:input_text.room");
-    expect(lightsStorageKey(undefined)).toBe("staged-lights-card:default");
+    const key = lightsStorageKey({ type: "custom:scene-studio-room-lights-card", entity: "input_text.room" });
+    expect(key).toBe("scene-studio-room-lights-card:input_text.room");
+    expect(lightsStorageKey(undefined)).toBe("scene-studio-room-lights-card:default");
     expect(
-      lightsStorageKey({ type: "custom:staged-lights-card", entity: "", title: "" }),
-    ).toBe("staged-lights-card:default");
+      lightsStorageKey({ type: "custom:scene-studio-room-lights-card", entity: "", title: "" }),
+    ).toBe("scene-studio-room-lights-card:default");
     expect(
       lightsStorageKey(
-        { type: "custom:staged-lights-card", entity: "input_text.room" },
-        "staged-lights-mini-card",
+        { type: "custom:scene-studio-room-lights-card", entity: "input_text.room" },
+        "scene-studio-room-lights-mini-card",
       ),
-    ).toBe("staged-lights-mini-card:input_text.room");
+    ).toBe("scene-studio-room-lights-mini-card:input_text.room");
     expect(readStoredLightsState(key)).toBeUndefined();
     writeStoredLightsState(key, {
       rgb: { on: false, brightness: 90, hex: "#ffffff" },
@@ -617,7 +617,7 @@ describe("applyLightsMode", () => {
   });
 
   const config = {
-    type: "custom:staged-lights-card",
+    type: "custom:scene-studio-room-lights-card",
     stages: 3,
     rgb: ["light.sofa", "light.sofa", "", "not-an-id"],
     warm: ["light.floor", "light.reading", "switch.sconce"],

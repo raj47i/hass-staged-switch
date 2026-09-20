@@ -484,19 +484,21 @@ export const entityLookForSlot = (
   if (!slot.entities.includes(entityId)) {
     return { state: "off", effect: "" };
   }
-  const look = override
-    ? { ...defaultEntityLook(draft, slot), ...override }
-    : defaultEntityLook(draft, slot);
+  const fallback = defaultEntityLook(draft, slot);
   if (slot.row === "rgb") {
     return {
-      state: override?.state === "off" ? "off" : "on",
+      state: override?.state === "on" ? "on" : "off",
       brightness: asRgbPercent(draft.brightness),
       hex: draft.hex || DEFAULT_RGB_HEX,
       effect: draft.effect ?? "",
     };
   }
+  if (!override) {
+    return { ...fallback, state: "off" };
+  }
   return {
-    ...look,
+    ...fallback,
+    ...override,
     hex:
       slot.row === "warm"
         ? WARM_HEX
@@ -608,19 +610,45 @@ export const lightGroupToScenes = (
   draft: LightGroupDraft,
   hass?: HomeAssistant,
 ): SceneConfig[] => {
-  const slug = (draft.slug ?? "").trim() || slugify(draft.name);
-  const name = (draft.name ?? "").trim() || slug;
+  const named = (draft.name ?? "").trim();
+  const slug = (draft.slug ?? "").trim() || (named ? slugify(named) : "");
+  const name = named || slug;
   const ids = allLightIds(draft);
   const rgb = rowIds(draft, "rgb");
   const warm = rowIds(draft, "warm");
   const white = rowIds(draft, "white");
   const whites = rowIds(draft, "whites");
   const kind = lookKind(draft);
+  if (!slug) {
+    return [];
+  }
   if (
     !ids.length ||
     (!rgb.length && !warm.length && !white.length && !whites.length)
   ) {
-    return [];
+    return name
+      ? [
+          {
+            id: lookSceneId(kind, slug, "off"),
+            name: `${name} · ${DEFAULT_SCENE_LABEL}`,
+            icon: OFF_ICON,
+            entities: ids.length ? allOff(ids) : {},
+            meta: {
+              entities: ids,
+              rgb,
+              warm,
+              white,
+              whites,
+              warmStages: draft.warmStages,
+              whiteStages: draft.whiteStages,
+              whitesStages: draft.whitesStages,
+              hex: draft.hex,
+              brightness: draft.brightness,
+              effect: draft.effect,
+            },
+          },
+        ]
+      : [];
   }
 
   const meta = {
@@ -634,6 +662,9 @@ export const lightGroupToScenes = (
     whitesStages:
       draft.whitesStages ??
       (whites.length ? whitesStageCount(whites, draft.whitesStages) : undefined),
+    hex: draft.hex,
+    brightness: draft.brightness,
+    effect: draft.effect,
   };
   const scenes: SceneConfig[] = [
     {
@@ -703,9 +734,9 @@ export const draftFromLightScenes = (
   const warm: string[] = [...(meta?.warm ?? [])];
   const white: string[] = [...(meta?.white ?? [])];
   const whites: string[] = [...(meta?.whites ?? [])];
-  let hex = DEFAULT_RGB_HEX;
-  let brightness = DEFAULT_RGB_PERCENT;
-  let effect = "";
+  let hex = meta?.hex || DEFAULT_RGB_HEX;
+  let brightness = meta?.brightness ?? DEFAULT_RGB_PERCENT;
+  let effect = meta?.effect ?? "";
   let warmStages = meta?.warmStages ?? 0;
   let whiteStages = meta?.whiteStages ?? 0;
   let whitesStages = meta?.whitesStages ?? 0;

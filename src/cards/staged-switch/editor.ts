@@ -11,7 +11,11 @@ import {
   isToggleEntity,
   isValidEntityId,
   normalizeSwitch,
+  normalizeTitleAlign,
   pickedValue,
+  registerCardAliases,
+  storedTitleAlign,
+  TITLE_ALIGN_OPTIONS,
 } from "../../shared";
 import type { HomeAssistant, SwitchEntityConfig, SwitchState } from "../../shared/types";
 import { peekStudioScenes, refreshStudioScenes, studioSetOptions } from "../../studio/bind";
@@ -21,7 +25,7 @@ import {
   studioSetEntityIds,
   toggleHiddenEntity,
 } from "../../studio/entity-buttons";
-import { CARD_NAME, EDITOR_SELECT_EVENT, MAX_RESOLVED_STAGES, MAX_STAGES } from "./const";
+import { CARD_LEGACY_NAME, CARD_NAME, EDITOR_SELECT_EVENT, MAX_RESOLVED_STAGES, MAX_STAGES } from "./const";
 import { resolveStages } from "./stages";
 import { editorStyles } from "./styles";
 import type { StageConfig, StagedSwitchCardConfig } from "./types";
@@ -75,6 +79,7 @@ export class StagedSwitchCardEditor extends LitElement {
       type: this._config.type,
       studio: slug,
       title: this._config.title,
+      title_align: this._config.title_align,
       show_switches: this._config.show_switches,
       show_stage_labels: this._config.show_stage_labels,
     };
@@ -145,6 +150,10 @@ export class StagedSwitchCardEditor extends LitElement {
   private _titleChanged(ev: Event): void {
     const value = (ev.target as HTMLInputElement).value;
     this._updateConfig({ title: value || undefined });
+  }
+
+  private _alignChanged(ev: Event): void {
+    this._updateConfig({ title_align: storedTitleAlign(pickedValue(ev)) });
   }
 
   private _entityChanged(ev: CustomEvent<{ value?: string }>): void {
@@ -423,7 +432,7 @@ export class StagedSwitchCardEditor extends LitElement {
     const sets = studioSetOptions(this.hass, ["switch", "advanced"]);
     return html`
       <label class="row">
-        <span class="label">Scene Studio set</span>
+        <span class="label">Scene-set</span>
         <select
           class="text-input"
           .value=${config.studio ?? ""}
@@ -440,17 +449,32 @@ export class StagedSwitchCardEditor extends LitElement {
             <span class="help">
               Stages come from the
               ${sets.find((set) => set.slug === config.studio)?.name ?? config.studio}
-              scene set. Edit it in Scene Studio.
+              scene-set. Edit it in Scene Studio.
             </span>
           `
         : nothing}
 
-      <ha-textfield
-        label="Title"
-        .value=${config.title ?? ""}
-        placeholder="Staged Switch Control"
-        @input=${this._titleChanged}
-      ></ha-textfield>
+      <label class="row">
+        <span class="label">Title</span>
+        <div class="split">
+          <input
+            class="text-input"
+            .value=${config.title ?? ""}
+            placeholder="Room Switches"
+            @input=${this._titleChanged}
+          />
+          <select
+            class="text-input"
+            .value=${normalizeTitleAlign(config.title_align)}
+            ?disabled=${!((config.title ?? "").trim())}
+            @change=${this._alignChanged}
+          >
+            ${TITLE_ALIGN_OPTIONS.map(
+              (option) => html`<option value=${option.value}>${option.label}</option>`,
+            )}
+          </select>
+        </div>
+      </label>
 
       ${config.studio
         ? nothing
@@ -798,8 +822,11 @@ export class StagedSwitchCardEditor extends LitElement {
   static styles = editorStyles;
 }
 
+registerCardAliases(`${CARD_NAME}-editor`, [`${CARD_LEGACY_NAME}-editor`]);
+
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-switch-card-editor": StagedSwitchCardEditor;
+    [CARD_NAME + "-editor"]: StagedSwitchCardEditor;
+    [CARD_LEGACY_NAME + "-editor"]: StagedSwitchCardEditor;
   }
 }

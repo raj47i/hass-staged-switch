@@ -1,6 +1,9 @@
+import { pickerName } from "../shared/const";
+
 export const STUDIO_PANEL = "scene-studio-panel";
 export const STUDIO_CARD = "scene-studio-card";
 export const STUDIO_CARD_TYPE = "custom:scene-studio-card";
+export const STUDIO_CARD_TITLE = pickerName("Scene-set");
 export const STUDIO_DASHBOARD_PATH = "scene-studio";
 export const STUDIO_ICON = "mdi:palette-swatch";
 export const STUDIO_WIZARD = "scene-studio-wizard";
@@ -8,17 +11,17 @@ export const STUDIO_LIGHTS_WIZARD = "scene-studio-lights-wizard";
 export const STUDIO_ADVANCED_WIZARD = "scene-studio-advanced-wizard";
 export const STUDIO_TITLE = "Scene Studio";
 export const STUDIO_SET_KIND_LABEL = {
-  light: "Simple light scene set",
-  minimal: "Minimal light scene set",
-  advanced: "Advanced light scene set",
-  switch: "Switch scene set",
+  light: "Lights scene-set : Simple",
+  minimal: "Lights scene-set : Minimal",
+  advanced: "Lights scene-set : Advanced",
+  switch: "Switches scene-set",
 } as const;
 
 export const studioSetKindLabel = (
   kind: keyof typeof STUDIO_SET_KIND_LABEL | string,
 ): string =>
   STUDIO_SET_KIND_LABEL[kind as keyof typeof STUDIO_SET_KIND_LABEL] ??
-  "Scene set";
+  "Scene-set";
 
 export const studioSetEditorTitle = (
   kind: keyof typeof STUDIO_SET_KIND_LABEL,

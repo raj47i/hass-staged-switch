@@ -1,8 +1,11 @@
+import { ROOM_LIGHTS_CARD, ROOM_LIGHTS_CARD_LEGACY } from "../../shared/card-ids";
+import { pickerName } from "../../shared/const";
 import type { LightRowId } from "./types";
 
-export const CARD_NAME = "staged-lights-card";
-export const CARD_TITLE = "Staged Lights Card";
-export const EDITOR_SELECT_EVENT = "staged-lights-editor-select";
+export const CARD_NAME = ROOM_LIGHTS_CARD;
+export const CARD_LEGACY_NAME = ROOM_LIGHTS_CARD_LEGACY;
+export const CARD_TITLE = pickerName("Room Lights: Advanced");
+export const EDITOR_SELECT_EVENT = "scene-studio-room-lights-editor-select";
 export const RGB_DOMAINS = ["light"];
 export const STAGE_DOMAINS = ["light", "switch"];
 export const MIN_LIGHT_STAGES = 2;

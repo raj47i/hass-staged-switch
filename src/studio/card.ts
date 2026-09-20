@@ -11,7 +11,7 @@ import {
   studioScenesVersion,
   studioSetOptions,
 } from "./bind";
-import { STUDIO_CARD, STUDIO_CARD_TYPE } from "./const";
+import { STUDIO_CARD, STUDIO_CARD_TITLE, STUDIO_CARD_TYPE } from "./const";
 import type { SwitchGroupSummary } from "./types";
 import "./card-editor";
 import "./panel";
@@ -20,6 +20,8 @@ import "../cards/staged-switch/card";
 
 export interface SceneStudioCardConfig extends LovelaceCardConfig {
   studio?: string;
+  title?: string;
+  title_align?: "left" | "center" | "right";
   editor?: boolean;
   show_switches?: boolean;
   hidden_entities?: string[];
@@ -121,7 +123,7 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
       return html`
         <ha-card>
           <div class="empty">
-            No Scene Studio set on this card yet. Open Scene Studio from the sidebar to
+            No scene-set on this card yet. Open Scene Studio from the sidebar to
             create one, then pick it here.
           </div>
         </ha-card>
@@ -131,14 +133,14 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
       <div class="stack">
         ${sets.map((set) =>
           set.kind === "light" || set.kind === "minimal"
-            ? html`<staged-lights-mini-card
+            ? html`<scene-studio-room-lights-mini-card
                 data-studio=${set.slug}
                 data-kind=${set.kind}
-              ></staged-lights-mini-card>`
-            : html`<staged-switch-card
+              ></scene-studio-room-lights-mini-card>`
+            : html`<scene-studio-room-switches-card
                 data-studio=${set.slug}
                 data-kind=${set.kind}
-              ></staged-switch-card>`,
+              ></scene-studio-room-switches-card>`,
         )}
       </div>
     `;
@@ -173,9 +175,9 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
 
 registerLovelaceCard({
   type: STUDIO_CARD,
-  name: "Scene Studio Card",
+  name: STUDIO_CARD_TITLE,
   description:
-    "The staged lights or switch control for a Scene Studio set. Guest Room lights become the mini lights card.",
+    "Pick a scene-set. Lights use Room Lights: Mini; switches use Room Switches.",
   preview: false,
   documentationURL: DOCUMENTATION_URL,
 });

@@ -53,6 +53,7 @@ import {
   whitesStageHex,
   type SimpleLightSlot,
 } from "./lights";
+import { resolveWizardStep, WIZARD_STEPS } from "./route";
 import { studioStyles } from "./styles";
 import type {
   LightGroupDraft,
@@ -62,13 +63,7 @@ import type {
   StudioWizardStep,
 } from "./types";
 
-const STEPS: StudioWizardStep[] = [
-  "entities",
-  "name",
-  "groups",
-  "edit",
-  "review",
-];
+const STEPS = WIZARD_STEPS.light;
 const STEP_LABEL: Record<StudioWizardStep, string> = {
   entities: "Entities",
   name: "Name",
@@ -84,9 +79,10 @@ export class SceneStudioLightsWizard extends LitElement {
   @property({ type: Boolean }) public slugLocked = false;
   @property({ attribute: false }) public previousIds: string[] = [];
   @property({ type: Number }) public session = 0;
+  @property() public step: StudioWizardStep = "name";
 
   @state() private _draft: LightGroupDraft = newLightGroupDraft();
-  @state() private _step: StudioWizardStep = "entities";
+  @state() private _step: StudioWizardStep = "name";
   @state() private _error?: string;
   @state() private _busy = false;
   @state() private _slugTouched = false;
@@ -119,13 +115,24 @@ export class SceneStudioLightsWizard extends LitElement {
       if (!this._draft.entities.length) {
         this._draft.entities = allLightIds(this._draft);
       }
-      this._step = "entities";
+      this._step = resolveWizardStep(STEPS, this.step);
       this._error = undefined;
       this._notice = undefined;
       this._slugTouched = false;
       this._collapsed = {};
       this._resetLive();
       this._cachedDraft = undefined;
+    }
+  }
+
+  protected updated(changed: PropertyValues): void {
+    if (
+      this._clonedSession === this.session &&
+      changed.has("step") &&
+      STEPS.includes(this.step) &&
+      this.step !== this._step
+    ) {
+      void this._leaveTo(this.step);
     }
   }
 
@@ -227,6 +234,12 @@ export class SceneStudioLightsWizard extends LitElement {
   private _slugInput(ev: Event): void {
     this._slugTouched = true;
     this._patch({ slug: slugify((ev.target as HTMLInputElement).value) });
+  }
+
+  private _persistName(): void {
+    if (this._step === "name" && this._draft.name.trim() && this._draft.slug.trim()) {
+      void this._persist();
+    }
   }
 
   private get _presets(): string[] {
@@ -355,6 +368,7 @@ export class SceneStudioLightsWizard extends LitElement {
     this._step = step;
     this._error = undefined;
     this._notice = undefined;
+    fireEvent(this, "studio-step", { step });
   }
 
   private async _persist(): Promise<boolean> {
@@ -406,7 +420,7 @@ export class SceneStudioLightsWizard extends LitElement {
     }
     const index = this._stepIndex;
     if (index > 0) {
-      void this._leaveTo(STEPS[index - 1] ?? "entities");
+      void this._leaveTo(STEPS[index - 1] ?? "name");
     } else {
       fireEvent(this, "studio-cancel");
     }
@@ -650,13 +664,14 @@ export class SceneStudioLightsWizard extends LitElement {
     return html`
       <div class="form">
         <label class="field">
-          <span>Scene set name</span>
+          <span>Scene-set name</span>
           <input
             type="text"
             class="text-input"
             placeholder="Living room"
             .value=${this._draft.name}
             @input=${this._nameInput}
+            @blur=${this._persistName}
           />
         </label>
         <label class="field">
@@ -667,6 +682,7 @@ export class SceneStudioLightsWizard extends LitElement {
             .value=${this._draft.slug}
             ?disabled=${this.slugLocked}
             @input=${this._slugInput}
+            @blur=${this._persistName}
           />
           <span class="help">
             Home Assistant scenes will be
@@ -997,7 +1013,7 @@ export class SceneStudioLightsWizard extends LitElement {
         <p class="help">
           Off / Default is always all lights off and is not edited. Open a look
           to change its lights live. Save writes that look. Each step writes the
-          full set.
+          full scene-set.
         </p>
         ${this._renderLookList(true)}
       </div>

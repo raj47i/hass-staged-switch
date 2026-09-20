@@ -13,9 +13,10 @@ export interface StageConfig {
 
 export interface StagedSwitchCardConfig extends LovelaceCardConfig {
   type: string;
-  /** Scene Studio set slug. Stages are read from those scenes. */
+  /** Scene-set slug. Stages are read from those scenes. */
   studio?: string;
   title?: string;
+  title_align?: "left" | "center" | "right";
   entity?: string;
   power_entity?: string;
   stages?: StageConfig[];

@@ -73,7 +73,7 @@ export const renderEntityButtonsEditor = (opts: {
             <div class="row">
               <span class="help">
                 These buttons sit under the scene controls. Every entity in the
-                scene set is listed, including ones not in a group. Uncheck a
+                scene-set is listed, including ones not in a group. Uncheck a
                 name to hide it. New entities stay checked.
               </span>
               <div class="list">
@@ -97,7 +97,7 @@ export const renderEntityButtonsEditor = (opts: {
           `
         : html`
             <span class="help"
-              >${opts.emptyHint ?? "No entities in this scene set yet."}</span
+              >${opts.emptyHint ?? "No entities in this scene-set yet."}</span>
             >
           `
       : nothing}

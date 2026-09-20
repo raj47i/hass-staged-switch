@@ -11,11 +11,13 @@ import {
   errorMessage,
   friendlyActionError,
   isValidEntityId,
+  registerCardAliases,
   registerLovelaceCard,
   relevantHassChanged,
   rowFillPercent,
   SerialActionQueue,
   setEntityOnOff,
+  titleAlignStyle,
   setInputText,
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
@@ -48,7 +50,7 @@ import {
 } from "../staged-lights/stages";
 import { exclusiveLightsState, serializeLightsState } from "../staged-lights/state";
 import type { LightRowId, LightsCardState, StagedLightsCardConfig } from "../staged-lights/types";
-import { CARD_NAME, CARD_TITLE } from "./const";
+import { CARD_LEGACY_NAME, CARD_NAME, CARD_TITLE } from "./const";
 import "./editor";
 import {
   miniControlRow,
@@ -577,7 +579,9 @@ export class StagedLightsMiniCard extends LitElement implements LovelaceCard {
 
     const title = this._resolved?.title?.trim();
     return html`
-      ${title ? html`<h2 class="title">${title}</h2>` : nothing}
+      ${title
+        ? html`<h2 class="title" style=${titleAlignStyle(this._resolved?.title_align)}>${title}</h2>`
+        : nothing}
       <ha-card>
         ${this._error ? html`<div class="warning" role="alert">${this._error}</div>` : nothing}
         ${this._resolved?.entity && !this._helper
@@ -598,13 +602,15 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "A compact lights card: RGB, Warm, and White on one row, with stages or color presets on the second.",
+    "Compact RGB, Warm, and White. Bind a scene-set or configure by hand.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
+registerCardAliases(CARD_NAME, [CARD_LEGACY_NAME]);
 
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-lights-mini-card": StagedLightsMiniCard;
+    [CARD_NAME]: StagedLightsMiniCard;
+    [CARD_LEGACY_NAME]: StagedLightsMiniCard;
   }
 }

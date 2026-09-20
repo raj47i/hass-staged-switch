@@ -61,13 +61,16 @@ export const sharedCardChrome = css`
 
   .titles {
     min-width: 0;
+    flex: 1;
   }
 
   .title {
     margin: 0;
-    font-size: 18px;
-    font-weight: 500;
-    line-height: 24px;
+    font-family: var(--ha-font-family-body, var(--ha-font-family, Roboto, Noto, sans-serif));
+    font-size: var(--ha-font-size-m, 14px);
+    font-weight: var(--ha-font-weight-medium, 500);
+    line-height: var(--ha-line-height-condensed, 20px);
+    letter-spacing: 0.1px;
     color: var(--primary-text-color);
   }
 `;
@@ -206,6 +209,18 @@ export const sharedEditorStyles = css`
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .split select {
+    width: auto;
+    min-width: 7.5rem;
   }
 
   .label {

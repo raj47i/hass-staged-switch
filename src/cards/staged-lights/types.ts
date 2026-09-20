@@ -18,10 +18,10 @@ export interface RowIcons {
 
 export interface StagedLightsCardConfig extends LovelaceCardConfig {
   type: string;
-  /** Scene Studio set slug. Rows and stages are read from those scenes. */
+  /** Scene-set slug. Rows and stages are read from those scenes. */
   studio?: string;
-  /** Ignored leftover. Existing YAML may still have it. */
   title?: string;
+  title_align?: "left" | "center" | "right";
   entity?: string;
   stages?: number;
   rgb?: Array<string | SwitchEntityConfig>;

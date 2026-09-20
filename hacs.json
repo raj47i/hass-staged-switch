@@ -1,6 +1,6 @@
 {
-  "name": "Staged Switch Card",
-  "filename": "staged-switch-card.js",
+  "name": "Hass Scene Studio",
+  "filename": "hass-scene-studio.js",
   "render_readme": true,
   "homeassistant": "2023.4.0"
 }

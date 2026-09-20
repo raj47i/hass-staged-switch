@@ -2,6 +2,7 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { entityDisplayName, fireEvent, isRgbCapableLight } from "../shared";
 import type { HomeAssistant } from "../shared/types";
+import { DEFAULT_ADVANCED_LEVEL_TEXT } from "./advanced";
 import { STUDIO_ASSIGN } from "./const";
 import { studioIntensityNames } from "./lights";
 import { studioStyles } from "./styles";
@@ -22,6 +23,9 @@ export interface AssignGroup {
   showStages?: boolean;
   minEntities?: number;
   stageChoices?: AssignStageChoice[];
+  levelInput?: boolean;
+  levels?: string;
+  levelWarning?: string;
 }
 
 type DragPayload = { entityId: string; from: string };
@@ -174,7 +178,42 @@ export class SceneStudioAssign extends LitElement {
     );
   }
 
+  private _renderLevelInput(group: AssignGroup) {
+    return html`
+      <label class="stage-pick" @click=${(ev: Event) => ev.stopPropagation()}>
+        <span class="help">Levels</span>
+        <input
+          type="text"
+          .value=${group.levels ?? DEFAULT_ADVANCED_LEVEL_TEXT}
+          placeholder=${DEFAULT_ADVANCED_LEVEL_TEXT}
+          @input=${(ev: Event) =>
+            fireEvent(this, "studio-group-levels", {
+              groupId: group.id,
+              value: (ev.target as HTMLInputElement).value,
+              commit: false,
+            })}
+          @blur=${(ev: Event) => {
+            const value = (ev.target as HTMLInputElement).value.trim()
+              ? (ev.target as HTMLInputElement).value
+              : DEFAULT_ADVANCED_LEVEL_TEXT;
+            fireEvent(this, "studio-group-levels", {
+              groupId: group.id,
+              value,
+              commit: true,
+            });
+          }}
+        />
+        ${group.levelWarning
+          ? html`<span class="help error">${group.levelWarning}</span>`
+          : nothing}
+      </label>
+    `;
+  }
+
   private _renderStageSelect(group: AssignGroup) {
+    if (group.levelInput) {
+      return this._renderLevelInput(group);
+    }
     const ready = group.entities.length >= this._minEntities(group);
     const choices = this._stageChoices(group);
     const current = ready

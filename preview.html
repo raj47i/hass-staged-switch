@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Staged Switch preview</title>
+    <title>Hass Scene Studio preview</title>
     <style>
       :root {
         --primary-color: #03a9f4;
@@ -137,7 +137,7 @@
       customElements.define("ha-icon", HaIcon);
       customElements.define("ha-state-icon", HaStateIcon);
     </script>
-    <script type="module" src="/dist/staged-switch-card.js"></script>
+    <script type="module" src="/dist/hass-scene-studio.js"></script>
   </head>
   <body>
     <header class="app-header">
@@ -150,8 +150,8 @@
         <p class="muted">What the card looks like on a Home Assistant dashboard.</p>
         <figure class="shot">
           <img
-            src="images/staged-switch-card.png"
-            alt="Staged Switch Card with Power, five stages, and two rows of entity chips"
+            src="images/scene-studio-room-switches.png"
+            alt="Scene Studio - Room Switches with Power, five stages, and two rows of entity chips"
           />
         </figure>
       </section>
@@ -159,10 +159,10 @@
         <h2 class="section-title">Live cards</h2>
         <p class="muted">Same control, interactive in this browser.</p>
         <div class="cards">
-          <staged-switch-card id="many"></staged-switch-card>
-          <staged-switch-card id="card"></staged-switch-card>
-          <staged-lights-card id="lights"></staged-lights-card>
-          <staged-lights-mini-card id="lights-mini"></staged-lights-mini-card>
+          <scene-studio-room-switches-card id="many"></scene-studio-room-switches-card>
+          <scene-studio-room-switches-card id="card"></scene-studio-room-switches-card>
+          <scene-studio-room-lights-card id="lights"></scene-studio-room-lights-card>
+          <scene-studio-room-lights-mini-card id="lights-mini"></scene-studio-room-lights-mini-card>
         </div>
       </section>
     </main>
@@ -354,7 +354,7 @@
       };
 
       card.setConfig({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         title: "Patio",
         entity: "input_number.patio_stage",
         power_entity: "input_boolean.patio_power",
@@ -363,7 +363,7 @@
       });
 
       many.setConfig({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         title: "Seven visible, one hidden",
         entity: "input_number.many_stage",
         power_entity: "input_boolean.patio_power",
@@ -379,14 +379,14 @@
         ],
       });
       lights.setConfig({
-        type: "custom:staged-lights-card",
+        type: "custom:scene-studio-room-lights-card",
         entity: "input_text.living_lights",
         rgb: ["light.sofa_rgb", "light.cabinet_rgb"],
         warm: ["light.floor_lamp", "light.reading"],
         white: ["light.ceiling", "light.desk", "light.porch"],
       });
       lightsMini.setConfig({
-        type: "custom:staged-lights-mini-card",
+        type: "custom:scene-studio-room-lights-mini-card",
         entity: "input_text.living_lights",
         rgb: ["light.sofa_rgb", "light.cabinet_rgb"],
         warm: ["light.floor_lamp", "light.reading"],

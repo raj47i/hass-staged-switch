@@ -662,7 +662,8 @@ export const studioStyles = css`
     min-width: 0;
   }
 
-  .stage-pick select {
+  .stage-pick select,
+  .stage-pick input[type="text"] {
     width: 100%;
     min-width: 0;
     max-width: 100%;

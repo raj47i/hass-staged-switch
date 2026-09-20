@@ -12,12 +12,17 @@ import {
   isValidEntityId,
   normalizeState,
   normalizeSwitch,
+  normalizeTitleAlign,
   pickedValue,
+  registerCardAliases,
   safeIcon,
+  storedTitleAlign,
+  TITLE_ALIGN_OPTIONS,
 } from "../../shared";
 import type { HomeAssistant, SwitchEntityConfig, SwitchState } from "../../shared/types";
 import { normalizeHex } from "./color";
 import {
+  CARD_LEGACY_NAME,
   CARD_NAME,
   MAX_RGB_PRESETS,
   MIN_LIGHT_STAGES,
@@ -37,7 +42,7 @@ import {
   type StageRowId,
 } from "./stages";
 import { editorStyles } from "./styles";
-import { peekStudioScenes, refreshStudioScenes, studioSetOptions } from "../../studio/bind";
+import { peekStudioScenes, refreshStudioScenes, studioCardTitle, studioSetOptions } from "../../studio/bind";
 import {
   hiddenEntityIds,
   renderEntityButtonsEditor,
@@ -96,6 +101,8 @@ export class StagedLightsCardEditor extends LitElement {
     this._config = {
       type: this._config.type,
       studio: slug,
+      title: this._config.title,
+      title_align: this._config.title_align,
       show_switches: this._config.show_switches,
     };
     fireConfigChanged(this, this._config);
@@ -107,6 +114,14 @@ export class StagedLightsCardEditor extends LitElement {
     }
     this._config = { ...this._config, ...patch };
     fireConfigChanged(this, this._config);
+  }
+
+  private _titleChanged(ev: Event): void {
+    this._update({ title: (ev.target as HTMLInputElement).value });
+  }
+
+  private _alignChanged(ev: Event): void {
+    this._update({ title_align: storedTitleAlign(pickedValue(ev)) });
   }
 
   private _domains(row: LightRowId): string[] {
@@ -645,9 +660,12 @@ export class StagedLightsCardEditor extends LitElement {
   private _renderSharedFields() {
     const config = this._config!;
     const sets = studioSetOptions(this.hass, ["light", "minimal"]);
+    const selected = sets.find((set) => set.slug === config.studio);
+    const defaultTitle = selected ? studioCardTitle(selected.name) : "";
+    const titleValue = config.title ?? defaultTitle;
     return html`
       <label class="row">
-        <span class="label">Scene Studio set</span>
+        <span class="label">Scene-set</span>
         <select
           class="text-input"
           .value=${config.studio ?? ""}
@@ -659,12 +677,33 @@ export class StagedLightsCardEditor extends LitElement {
           )}
         </select>
       </label>
+      <label class="row">
+        <span class="label">Title</span>
+        <div class="split">
+          <input
+            class="text-input"
+            .value=${titleValue}
+            placeholder=${defaultTitle || "Optional heading"}
+            @input=${this._titleChanged}
+          />
+          <select
+            class="text-input"
+            .value=${normalizeTitleAlign(config.title_align)}
+            ?disabled=${!titleValue.trim()}
+            @change=${this._alignChanged}
+          >
+            ${TITLE_ALIGN_OPTIONS.map(
+              (option) => html`<option value=${option.value}>${option.label}</option>`,
+            )}
+          </select>
+        </div>
+      </label>
       ${config.studio
         ? html`
             <span class="help">
               This card uses the
               ${sets.find((set) => set.slug === config.studio)?.name ?? config.studio}
-              scene set. Edit it in Scene Studio.
+              scene-set. Edit it in Scene Studio.
             </span>
           `
         : html`
@@ -810,8 +849,11 @@ export class StagedLightsCardEditor extends LitElement {
   static styles = editorStyles;
 }
 
+registerCardAliases(`${CARD_NAME}-editor`, [`${CARD_LEGACY_NAME}-editor`]);
+
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-lights-card-editor": StagedLightsCardEditor;
+    [CARD_NAME + "-editor"]: StagedLightsCardEditor;
+    [CARD_LEGACY_NAME + "-editor"]: StagedLightsCardEditor;
   }
 }

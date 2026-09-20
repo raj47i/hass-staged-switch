@@ -30,20 +30,47 @@ const emptyDraft = (): SwitchGroupDraft => ({
 export const newSwitchGroupDraft = (name = ""): SwitchGroupDraft => {
   const draft = emptyDraft();
   if (!name.trim()) {
-    return draft;
+    return { ...draft, fresh: true };
   }
-  return { ...draft, name: name.trim(), slug: slugify(name) };
+  return { ...draft, name: name.trim(), slug: slugify(name), fresh: true };
+};
+
+export const allOffSwitchStages = (
+  draft: SwitchGroupDraft,
+): NonNullable<SwitchGroupDraft["stages"]> => {
+  const entities = (draft.entities ?? []).filter(isValidEntityId);
+  const names = [
+    draft.stage_names[0] || OFF_LABEL,
+    ...entities.map((_, index) => draft.stage_names[index + 1] || `Stage ${index + 1}`),
+  ];
+  return names.map((name) => ({
+    name,
+    switches: Object.fromEntries(entities.map((entityId) => [entityId, "off" as const])),
+  }));
 };
 
 const offMap = (ids: string[]): Record<string, { state: "off" }> =>
   Object.fromEntries(ids.map((entityId) => [entityId, { state: "off" as const }]));
 
 export const switchGroupToScenes = (draft: SwitchGroupDraft): SceneConfig[] => {
-  const slug = (draft.slug ?? "").trim() || slugify(draft.name);
-  const name = (draft.name ?? "").trim() || slug;
+  const named = (draft.name ?? "").trim();
+  const slug = (draft.slug ?? "").trim() || (named ? slugify(named) : "");
+  const name = named || slug;
   const entities = (draft.entities ?? []).filter(isValidEntityId);
-  if (!entities.length) {
+  if (!slug) {
     return [];
+  }
+  if (!entities.length) {
+    return name
+      ? [
+          {
+            id: sceneId(slug, 0),
+            name: `${name} · ${OFF_LABEL}`,
+            icon: OFF_ICON,
+            entities: {},
+          },
+        ]
+      : [];
   }
   if (draft.mode === "explicit" && draft.stages?.length) {
     return draft.stages.map((stage, index) => ({
@@ -57,6 +84,16 @@ export const switchGroupToScenes = (draft: SwitchGroupDraft): SceneConfig[] => {
         ]),
       ),
     }));
+  }
+  if (draft.fresh) {
+    return allOffSwitchStages({ ...draft, stage_names: draft.stage_names }).map(
+      (stage, index) => ({
+        id: sceneId(slug, index),
+        name: `${name} · ${stage.name}`,
+        icon: index === 0 ? OFF_ICON : STAGE_ICON,
+        entities: offMap(entities),
+      }),
+    );
   }
   const names = draft.stage_names.length
     ? draft.stage_names
@@ -146,7 +183,12 @@ export const draftFromScenes = (
   };
 };
 
-const KIND_ORDER: StudioSetKind[] = ["light", "minimal", "advanced", "switch"];
+export const KIND_ORDER: StudioSetKind[] = [
+  "light",
+  "minimal",
+  "advanced",
+  "switch",
+];
 
 export const summarizeGroups = (scenes: SceneConfig[]): SwitchGroupSummary[] => {
   const buckets = new Map<string, { kind: StudioSetKind; scenes: SceneConfig[] }>();

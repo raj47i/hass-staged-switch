@@ -92,9 +92,6 @@ const miniStyles = css`
   :host > .title {
     margin: 0 4px 8px;
     padding: 0;
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 28px;
   }
 `;
 

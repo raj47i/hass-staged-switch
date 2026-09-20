@@ -1,7 +1,7 @@
 {
-  "name": "staged-switch-card",
-  "version": "0.0.7-beta",
-  "description": "Home Assistant Lovelace cards for staged switch and light control, plus Scene Studio scene sets",
+  "name": "hass-scene-studio",
+  "version": "0.0.8-beta",
+  "description": "Hass Scene Studio — Lovelace cards and an editor for Home Assistant scene-sets",
   "keywords": [
     "home-assistant",
     "homeassistant",
@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/raj47i/hass-staged-switch",
   "type": "module",
-  "module": "dist/staged-switch-card.js",
+  "module": "dist/hass-scene-studio.js",
   "files": [
     "dist"
   ],
@@ -29,7 +29,8 @@
     "watch": "rollup -c --watch",
     "test": "vitest run",
     "preview": "npx --yes serve -l 4173 .",
-    "deploy": "sh scripts/deploy.sh"
+    "deploy": "sh scripts/deploy.sh",
+    "migrate-ha": "sh scripts/migrate-ha-ids.sh"
   },
   "dependencies": {
     "lit": "^3.2.1"

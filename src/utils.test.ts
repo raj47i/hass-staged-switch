@@ -63,7 +63,7 @@ describe("normalizeState", () => {
 describe("resolveStages", () => {
   it("builds cumulative stages with all-off as stage 0", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: ["switch.pump", { entity: "switch.heater", name: "Heating" }],
     });
 
@@ -78,7 +78,7 @@ describe("resolveStages", () => {
 
   it("drops incomplete switch rows", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: ["", { entity: "" }, null as unknown as string, "switch.pump"],
     });
 
@@ -88,7 +88,7 @@ describe("resolveStages", () => {
 
   it("honors explicit stage maps and lists", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       stages: [
         {
           name: "Path",
@@ -113,7 +113,7 @@ describe("resolveStages", () => {
 
   it("derives slider-only stages from the helper range", () => {
     const stages = resolveStages(
-      { type: "custom:staged-switch-card", entity: "input_number.scene" },
+      { type: "custom:scene-studio-room-switches-card", entity: "input_number.scene" },
       {
         entity_id: "input_number.scene",
         state: "1",
@@ -129,7 +129,7 @@ describe("resolveStages", () => {
 
   it("lets stage_names override explicit stage titles", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       stage_names: ["Night"],
       stages: [{ name: "Path", switches: { "light.hall": "on" } }],
     });
@@ -139,7 +139,7 @@ describe("resolveStages", () => {
 
   it("uses editable stage_names instead of entity names", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       stage_names: ["All off", "Reading", "Movie"],
       switches: ["switch.pump", "light.sofa"],
     });
@@ -155,7 +155,7 @@ describe("resolveStages", () => {
 
   it("caps helper ranges and extra switches at 5 stages besides Off", () => {
     const sliderOnly = resolveStages(
-      { type: "custom:staged-switch-card", entity: "input_number.scene" },
+      { type: "custom:scene-studio-room-switches-card", entity: "input_number.scene" },
       {
         entity_id: "input_number.scene",
         state: "0",
@@ -167,7 +167,7 @@ describe("resolveStages", () => {
     expect(sliderOnly).toHaveLength(6);
 
     const many = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: [
         "switch.a",
         "switch.b",
@@ -214,7 +214,7 @@ describe("relevantEntityIds", () => {
   it("includes the helper and every mapped switch", () => {
     expect(
       relevantEntityIds({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         entity: "input_number.pool_stage",
         switches: ["switch.pump", "switch.heater"],
       }),
@@ -228,7 +228,7 @@ describe("relevantEntityIds", () => {
   it("includes roster entities that never appear in a stage", () => {
     expect(
       relevantEntityIds({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         entity: "input_number.pool_stage",
         switches: ["switch.pump", "fan.patio"],
         stages: [{ name: "Off", switches: { "switch.pump": "off" } }],
@@ -239,7 +239,7 @@ describe("relevantEntityIds", () => {
   it("includes the optional power helper", () => {
     expect(
       relevantEntityIds({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         entity: "input_number.pool_stage",
         power_entity: "input_boolean.pool_power",
         switches: ["switch.pump"],
@@ -268,7 +268,7 @@ describe("power and stage persistence", () => {
 
   it("stores last power and stage separately from each other", () => {
     const key = cardStorageKey({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       entity: "input_number.patio_stage",
     });
     writeStoredPower(key, false);
@@ -280,7 +280,7 @@ describe("power and stage persistence", () => {
 
 describe("matchingStageIndex", () => {
   const stages = resolveStages({
-    type: "custom:staged-switch-card",
+    type: "custom:scene-studio-room-switches-card",
     switches: ["switch.fan", "light.string", "switch.heater"],
   });
 
@@ -316,7 +316,7 @@ describe("matchingStageIndex", () => {
 
   it("ignores entities omitted from an explicit stage", () => {
     const explicit = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       stages: [
         { name: "Reading", switches: { "light.reading": "on" } },
         {
@@ -337,7 +337,7 @@ describe("matchingStageIndex", () => {
 
   it("prefers the more specific matching stage", () => {
     const explicit = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       stages: [
         { name: "Fan only", switches: { "switch.fan": "on" } },
         {
@@ -359,7 +359,7 @@ describe("matchingStageIndex", () => {
 describe("allOffTargets", () => {
   it("turns every mapped entity off", () => {
     const stages = resolveStages({
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: ["switch.pump", "light.sofa"],
     });
     expect(allOffTargets(stages).map((item) => item.state)).toEqual(["off", "off"]);
@@ -367,7 +367,7 @@ describe("allOffTargets", () => {
 
   it("includes roster entities omitted from explicit stages", () => {
     const config = {
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: ["switch.pump", "light.sofa", "fan.patio"],
       stages: [
         { name: "Off", switches: { "switch.pump": "off" as const } },
@@ -394,7 +394,7 @@ describe("allOffTargets", () => {
 describe("stageDesiredStates and extraStagesHidden", () => {
   it("defaults every card entity to off, then applies the stage", () => {
     const config = {
-      type: "custom:staged-switch-card",
+      type: "custom:scene-studio-room-switches-card",
       switches: ["switch.pump", "light.sofa"],
       stages: [{ name: "Low", switches: { "switch.pump": "on" as const } }],
     };
@@ -410,14 +410,14 @@ describe("stageDesiredStates and extraStagesHidden", () => {
   it("treats a stub card with no helper or switches as empty", () => {
     expect(
       isEmptyStagedSwitchConfig({
-        type: "custom:staged-switch-card",
-        title: "Staged Switch Control",
+        type: "custom:scene-studio-room-switches-card",
+        title: "Room Switches",
         switches: [],
       }),
     ).toBe(true);
     expect(
       isEmptyStagedSwitchConfig({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         switches: ["switch.fan"],
       }),
     ).toBe(false);
@@ -426,7 +426,7 @@ describe("stageDesiredStates and extraStagesHidden", () => {
   it("flags explicit configs that exceed the 5-stage cap", () => {
     expect(
       extraStagesHidden({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         stages: Array.from({ length: 7 }, (_, index) => ({
           name: `Stage ${index}`,
         })),
@@ -434,7 +434,7 @@ describe("stageDesiredStates and extraStagesHidden", () => {
     ).toBe(true);
     expect(
       extraStagesHidden({
-        type: "custom:staged-switch-card",
+        type: "custom:scene-studio-room-switches-card",
         stages: [{ name: "Off" }],
       }),
     ).toBe(false);
@@ -627,7 +627,7 @@ describe("distributeEvenly and visibleCardEntities", () => {
     expect(
       visibleCardEntities(
         {
-          type: "custom:staged-switch-card",
+          type: "custom:scene-studio-room-switches-card",
           switches: [
             "switch.fan",
             { entity: "light.string", hide: true },
@@ -641,7 +641,7 @@ describe("distributeEvenly and visibleCardEntities", () => {
       chunkEvenly(
         visibleCardEntities(
           {
-            type: "custom:staged-switch-card",
+            type: "custom:scene-studio-room-switches-card",
             switches: [
               "a.a",
               "a.b",

@@ -1,5 +1,6 @@
 import {
   cardStorageKey as scopedStorageKey,
+  readStoredItem,
 } from "../../shared/persist";
 import { CARD_NAME } from "./const";
 import { isLightsHelperPayload, parseLightsState, serializeLightsState } from "./state";
@@ -12,7 +13,7 @@ export const lightsStorageKey = (
 
 export const readStoredLightsState = (key: string): LightsCardState | undefined => {
   try {
-    const stored = globalThis.localStorage?.getItem(`${key}:state`);
+    const stored = readStoredItem(`${key}:state`);
     if (!stored) {
       return undefined;
     }
@@ -40,7 +41,7 @@ export const hasStoredLightsState = (
     return true;
   }
   try {
-    return Boolean(globalThis.localStorage?.getItem(`${storageKey}:state`));
+    return Boolean(readStoredItem(`${storageKey}:state`));
   } catch {
     return false;
   }

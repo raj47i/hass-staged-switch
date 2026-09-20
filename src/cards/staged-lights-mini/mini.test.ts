@@ -249,10 +249,10 @@ describe("mini lights layout", () => {
   it("stores mini state under a separate browser key", () => {
     expect(
       lightsStorageKey({ type: `custom:${CARD_NAME}`, entity: "input_text.room" }, CARD_NAME),
-    ).toBe("staged-lights-mini-card:input_text.room");
-    expect(lightsStorageKey(undefined, CARD_NAME)).toBe("staged-lights-mini-card:default");
+    ).toBe("scene-studio-room-lights-mini-card:input_text.room");
+    expect(lightsStorageKey(undefined, CARD_NAME)).toBe("scene-studio-room-lights-mini-card:default");
     expect(
       lightsStorageKey({ type: `custom:${CARD_NAME}`, entity: undefined, title: undefined }, CARD_NAME),
-    ).toBe("staged-lights-mini-card:default");
+    ).toBe("scene-studio-room-lights-mini-card:default");
   });
 });

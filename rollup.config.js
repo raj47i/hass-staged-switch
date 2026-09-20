@@ -7,7 +7,7 @@ import typescript from "@rollup/plugin-typescript";
 export default {
   input: "src/index.ts",
   output: {
-    file: "dist/staged-switch-card.js",
+    file: "dist/hass-scene-studio.js",
     format: "es",
     inlineDynamicImports: true,
     sourcemap: false,

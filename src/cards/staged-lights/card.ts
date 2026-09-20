@@ -11,6 +11,7 @@ import {
   errorMessage,
   friendlyActionError,
   isValidEntityId,
+  registerCardAliases,
   registerLovelaceCard,
   relevantHassChanged,
   rowFillPercent,
@@ -22,6 +23,7 @@ import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/typ
 import { normalizeHex } from "./color";
 import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
+  CARD_LEGACY_NAME,
   CARD_NAME,
   CARD_TITLE,
   DEFAULT_RGB_HEX,
@@ -589,13 +591,15 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "Room lights as exclusive RGB / Warm / White rows. Pick a Scene Studio set, or configure entities by hand.",
+    "Full RGB, Warm, and White rows. Bind a scene-set or configure by hand.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
+registerCardAliases(CARD_NAME, [CARD_LEGACY_NAME]);
 
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-lights-card": StagedLightsCard;
+    [CARD_NAME]: StagedLightsCard;
+    [CARD_LEGACY_NAME]: StagedLightsCard;
   }
 }

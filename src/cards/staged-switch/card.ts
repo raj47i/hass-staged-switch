@@ -17,12 +17,14 @@ import {
   SerialActionQueue,
   setEntityOnOff,
   setInputNumber,
+  titleAlignStyle,
   visibleCardEntities,
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
 import { DOCUMENTATION_URL } from "../../shared/const";
-import { registerLovelaceCard } from "../../shared/register";
+import { registerCardAliases, registerLovelaceCard } from "../../shared/register";
 import {
+  CARD_LEGACY_NAME,
   CARD_NAME,
   CARD_TITLE,
   DEFAULT_POWER_LABEL,
@@ -827,6 +829,7 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     const stageButtons = this._stageButtons;
     const showLabels = config.show_stage_labels !== false;
     const showSwitches = visibleRows.length > 0;
+    const heading = (config.title ?? DEFAULT_TITLE).trim();
     const wrongDomain =
       config.entity && domainOf(config.entity) !== "input_number";
 
@@ -834,7 +837,9 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
       <ha-card>
         <div class="header">
           <div class="titles">
-            <h2 class="title">${config.title ?? DEFAULT_TITLE}</h2>
+            ${heading
+              ? html`<h2 class="title" style=${titleAlignStyle(config.title_align)}>${heading}</h2>`
+              : nothing}
             <div class="stage-name">
               ${this._isOn ? (current?.name ?? "Unknown stage") : "Off"}
             </div>
@@ -913,13 +918,15 @@ registerLovelaceCard({
   type: CARD_NAME,
   name: CARD_TITLE,
   description:
-    "A Lovelace card that combines several switches, lights, or fans into one staged control.",
+    "Power and exclusive stages for switches, lights, and fans. Bind a scene-set or configure by hand.",
   preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
+registerCardAliases(CARD_NAME, [CARD_LEGACY_NAME]);
 
 declare global {
   interface HTMLElementTagNameMap {
-    "staged-switch-card": StagedSwitchCard;
+    [CARD_NAME]: StagedSwitchCard;
+    [CARD_LEGACY_NAME]: StagedSwitchCard;
   }
 }

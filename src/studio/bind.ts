@@ -1,4 +1,11 @@
-import { applyToggleTargets, callHassService, isUnreachableError } from "../shared";
+import {
+  applyToggleTargets,
+  callHassService,
+  isUnreachableError,
+  lovelaceType,
+  ROOM_LIGHTS_MINI_CARD,
+  ROOM_SWITCHES_CARD,
+} from "../shared";
 import { uniqueEntityIds } from "../shared/entities";
 import { rgbToHex } from "../cards/staged-lights/color";
 import type { StagedLightsCardConfig } from "../cards/staged-lights/types";
@@ -126,7 +133,7 @@ export const persistStudioScenes = async (
   scenes: SceneConfig[],
   previousIds: string[] = [],
 ): Promise<void> => {
-  if (!scenes.length) {
+  if (!hass || !scenes.length) {
     return;
   }
   await saveSwitchGroup(hass, scenes, previousIds);
@@ -437,10 +444,15 @@ export const studioCardTitle = (name = ""): string => {
   return trimmed.replace(/\s+(lights?|switches?)$/i, "").trim() || trimmed;
 };
 
+export const pickCardTitle = (
+  override: string | undefined,
+  derived: string,
+): string => (override !== undefined ? override : derived);
+
 export const studioControlCardType = (kind: StudioSetKind): string =>
   kind === "light" || kind === "minimal"
-    ? "custom:staged-lights-mini-card"
-    : "custom:staged-switch-card";
+    ? lovelaceType(ROOM_LIGHTS_MINI_CARD)
+    : lovelaceType(ROOM_SWITCHES_CARD);
 
 export const studioDashboardSets = (
   sets: SwitchGroupSummary[],
@@ -545,7 +557,8 @@ export const mergeLightsStudioConfig = (
     show_switches: config.show_switches,
     hidden_entities: hidden.length ? hidden : undefined,
     switches: overlayHiddenEntities(derived.switches ?? [], hidden),
-    title: config.title || derived.title,
+    title: pickCardTitle(config.title, derived.title ?? ""),
+    title_align: config.title_align,
     entity: config.entity,
   };
 };
@@ -620,20 +633,37 @@ export const mergeSwitchStudioConfig = (
     hidden_entities: hidden.length ? hidden : undefined,
     show_stage_labels: config.show_stage_labels,
     switches: overlayHiddenEntities(derived.switches ?? [], hidden),
-    title: config.title || derived.title,
+    title: pickCardTitle(config.title, derived.title ?? ""),
+    title_align: config.title_align,
   };
 };
 
 export const studioChildCardConfig = (
   kind: StudioSetKind,
   slug: string,
-  parent?: { show_switches?: boolean; hidden_entities?: string[] },
-): { type: string; studio: string; show_switches?: boolean; hidden_entities?: string[] } => ({
+  parent?: {
+    show_switches?: boolean;
+    hidden_entities?: string[];
+    title?: string;
+    title_align?: string;
+  },
+): {
+  type: string;
+  studio: string;
+  show_switches?: boolean;
+  hidden_entities?: string[];
+  title?: string;
+  title_align?: string;
+} => ({
   type: studioControlCardType(kind),
   studio: slug,
   ...(parent?.show_switches === true ? { show_switches: true } : {}),
   ...(parent?.hidden_entities?.length
     ? { hidden_entities: parent.hidden_entities }
+    : {}),
+  ...(parent && "title" in parent ? { title: parent.title } : {}),
+  ...(parent?.title_align && parent.title_align !== "left"
+    ? { title_align: parent.title_align }
     : {}),
 });
 

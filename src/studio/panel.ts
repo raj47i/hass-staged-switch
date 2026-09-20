@@ -8,6 +8,12 @@ import { deleteStudioSet, rememberWrittenScenes, refreshStudioScenes } from "./b
 import { uniqueStudioSceneIds } from "./ids";
 import { draftFromAdvancedScenes, newAdvancedLightDraft } from "./advanced";
 import { draftFromLightScenes, newLightGroupDraft } from "./lights";
+import {
+  parseStudioLocation,
+  studioHref,
+  wizardStepAt,
+  type StudioRoute,
+} from "./route";
 import { draftFromScenes, newSwitchGroupDraft, summarizeGroups } from "./scenes";
 import { readStudioSidebar, setStudioSidebar } from "./sidebar";
 import { studioStyles } from "./styles";
@@ -15,6 +21,8 @@ import type {
   AdvancedLightDraft,
   LightGroupDraft,
   SceneConfig,
+  StudioSetKind,
+  StudioWizardStep,
   SwitchGroupDraft,
   SwitchGroupSummary,
 } from "./types";
@@ -52,17 +60,23 @@ export class SceneStudioPanel extends LitElement {
   @state() private _confirmKey?: string;
   @state() private _confirmReady = false;
   @state() private _busyKey?: string;
+  @state() private _wizardStep: StudioWizardStep = "name";
   private _confirmTimer?: number;
+  private _applyingRoute = false;
 
   static styles = studioStyles;
 
   public connectedCallback(): void {
     super.connectedCallback();
-    void this._refresh();
+    window.addEventListener("popstate", this._onLocation);
+    window.addEventListener("hashchange", this._onLocation);
+    void this._boot();
     void this._syncSidebar();
   }
 
   public disconnectedCallback(): void {
+    window.removeEventListener("popstate", this._onLocation);
+    window.removeEventListener("hashchange", this._onLocation);
     window.clearTimeout(this._confirmTimer);
     super.disconnectedCallback();
   }
@@ -80,6 +94,135 @@ export class SceneStudioPanel extends LitElement {
     if (relevantHassChanged(previous, this.hass, ids)) {
       void this._refresh();
     }
+  }
+
+  private readonly _onLocation = (): void => {
+    this._applyRoute(parseStudioLocation(window.location.pathname, window.location.hash));
+  };
+
+  private async _boot(): Promise<void> {
+    await this._refresh();
+    this._applyRoute(
+      parseStudioLocation(window.location.pathname, window.location.hash),
+    );
+  }
+
+  private _routeFromState(): StudioRoute {
+    if (this._view === "list") {
+      return { view: "list" };
+    }
+    const kind = this._routeKind();
+    const slug = this._currentSlug();
+    return {
+      view: "wizard",
+      kind,
+      step: this._wizardStep,
+      slug: this._slugLocked ? slug : undefined,
+      creating: !this._slugLocked,
+    };
+  }
+
+  private _routeKind(): StudioSetKind {
+    if (this._view === "advanced") {
+      return "advanced";
+    }
+    if (this._view === "switch") {
+      return "switch";
+    }
+    return this._lightDraft.profile === "minimal" ? "minimal" : "light";
+  }
+
+  private _currentSlug(): string {
+    if (this._view === "advanced") {
+      return this._advancedDraft.slug;
+    }
+    if (this._view === "switch") {
+      return this._switchDraft.slug;
+    }
+    return this._lightDraft.slug;
+  }
+
+  private _syncLocation(replace = false): void {
+    if (this._applyingRoute || typeof window === "undefined") {
+      return;
+    }
+    const next = studioHref(
+      this._routeFromState(),
+      window.location.pathname,
+    );
+    const current = `${window.location.pathname}${window.location.hash}`;
+    if (next === window.location.pathname || next === current) {
+      return;
+    }
+    if (replace) {
+      window.history.replaceState(window.history.state, "", next);
+      return;
+    }
+    window.history.pushState({ sceneStudio: true }, "", next);
+  }
+
+  private _applyRoute(route: StudioRoute): void {
+    this._applyingRoute = true;
+    try {
+      if (route.view === "list") {
+        this._view = "list";
+        return;
+      }
+      if (route.view === "step") {
+        if (this._view !== "list") {
+          this._wizardStep = wizardStepAt(this._routeKind(), route);
+        }
+        return;
+      }
+      const view =
+        route.kind === "advanced"
+          ? "advanced"
+          : route.kind === "switch"
+            ? "switch"
+            : "lights";
+      const sameKind =
+        this._view === view &&
+        (route.kind !== "light" && route.kind !== "minimal"
+          ? true
+          : this._lightDraft.profile ===
+            (route.kind === "minimal" ? "minimal" : "simple"));
+      if (route.creating) {
+        if (!sameKind || this._slugLocked) {
+          this._startCreate(route.kind, route.step);
+          return;
+        }
+        this._wizardStep = route.step;
+        return;
+      }
+      const group = this._groups.find(
+        (item) => item.kind === route.kind && item.slug === route.slug,
+      );
+      if (!group) {
+        this._view = "list";
+        return;
+      }
+      if (
+        sameKind &&
+        this._slugLocked &&
+        this._currentSlug() === route.slug
+      ) {
+        this._wizardStep = route.step;
+        return;
+      }
+      this._openGroup(group, route.step);
+    } finally {
+      this._applyingRoute = false;
+    }
+  }
+
+  private _onStep(ev: Event): void {
+    const step = (ev as CustomEvent<{ step?: StudioWizardStep }>).detail?.step;
+    if (!step || step === this._wizardStep) {
+      this._syncLocation();
+      return;
+    }
+    this._wizardStep = step;
+    this._syncLocation();
   }
 
   private async _refresh(): Promise<void> {
@@ -117,38 +260,53 @@ export class SceneStudioPanel extends LitElement {
     }
   }
 
-  private _open(view: Exclude<StudioView, "list">): void {
+  private _open(view: Exclude<StudioView, "list">, step: StudioWizardStep = "name"): void {
     this._previousIds = [];
     this._slugLocked = false;
+    this._wizardStep = step;
     this._session += 1;
     this._view = view;
     this._notice = undefined;
     this._error = undefined;
   }
 
+  private _startCreate(kind: StudioSetKind, step: StudioWizardStep = "name"): void {
+    if (kind === "minimal") {
+      this._lightDraft = newLightGroupDraft("", "minimal");
+      this._open("lights", step);
+    } else if (kind === "advanced") {
+      this._advancedDraft = newAdvancedLightDraft();
+      this._open("advanced", step);
+    } else if (kind === "switch") {
+      this._switchDraft = newSwitchGroupDraft();
+      this._open("switch", step);
+    } else {
+      this._lightDraft = newLightGroupDraft();
+      this._open("lights", step);
+    }
+    this._syncLocation();
+  }
+
   private _createLights(): void {
-    this._lightDraft = newLightGroupDraft();
-    this._open("lights");
+    this._startCreate("light");
   }
 
   private _createMinimal(): void {
-    this._lightDraft = newLightGroupDraft("", "minimal");
-    this._open("lights");
+    this._startCreate("minimal");
   }
 
   private _createAdvanced(): void {
-    this._advancedDraft = newAdvancedLightDraft();
-    this._open("advanced");
+    this._startCreate("advanced");
   }
 
   private _createSwitch(): void {
-    this._switchDraft = newSwitchGroupDraft();
-    this._open("switch");
+    this._startCreate("switch");
   }
 
-  private _edit(group: SwitchGroupSummary): void {
+  private _openGroup(group: SwitchGroupSummary, step: StudioWizardStep = "name"): void {
     this._previousIds = group.scenes.map((scene) => scene.id);
     this._slugLocked = true;
+    this._wizardStep = step;
     this._session += 1;
     this._notice = undefined;
     this._error = undefined;
@@ -166,21 +324,33 @@ export class SceneStudioPanel extends LitElement {
     this._view = "switch";
   }
 
+  private _edit(group: SwitchGroupSummary, step: StudioWizardStep = "name"): void {
+    this._openGroup(group, step);
+    this._syncLocation();
+  }
+
   private _cancel(): void {
     this._view = "list";
+    this._syncLocation();
     void this._refresh();
   }
 
   private _rememberLook(ev: Event): void {
     const detail = (
       ev as CustomEvent<{
-        draft?: LightGroupDraft;
+        draft?: LightGroupDraft | SwitchGroupDraft | AdvancedLightDraft;
         id?: string;
         scenes?: SceneConfig[];
       }>
     ).detail;
-    if (detail?.draft && this._view === "lights") {
-      this._lightDraft = detail.draft;
+    if (detail?.draft) {
+      if (this._view === "lights") {
+        this._lightDraft = detail.draft as LightGroupDraft;
+      } else if (this._view === "advanced") {
+        this._advancedDraft = detail.draft as AdvancedLightDraft;
+      } else if (this._view === "switch") {
+        this._switchDraft = detail.draft as SwitchGroupDraft;
+      }
     }
     if (detail?.scenes?.length) {
       this._previousIds = uniqueStudioSceneIds(
@@ -194,6 +364,7 @@ export class SceneStudioPanel extends LitElement {
     }
     this._slugLocked = true;
     this._error = undefined;
+    this._syncLocation();
   }
 
   private async _save(ev: Event): Promise<void> {
@@ -221,6 +392,7 @@ export class SceneStudioPanel extends LitElement {
         this._lightDraft = detail.draft;
       }
       this._view = "list";
+      this._syncLocation();
       await this._refresh();
     } catch (error) {
       this._error = errorMessage(error, "Could not save scenes");
@@ -280,7 +452,7 @@ export class SceneStudioPanel extends LitElement {
       this._notice = `Deleted ${group.name} (${ids.length} scene${ids.length === 1 ? "" : "s"}).`;
       await this._refresh();
     } catch (error) {
-      this._error = errorMessage(error, "Could not delete this set");
+      this._error = errorMessage(error, "Could not delete this scene-set");
     } finally {
       this._busyKey = undefined;
     }
@@ -334,8 +506,8 @@ export class SceneStudioPanel extends LitElement {
           <div>
             <h1>${STUDIO_TITLE}</h1>
             <p class="muted">
-              An easier editor for Home Assistant scenes. Each set is a handful
-              of related scenes that remotes and automations call with
+              An easier editor for Home Assistant scenes. Each scene-set is a
+              handful of related scenes that remotes and automations call with
               <code>scene.turn_on</code>.
             </p>
           </div>
@@ -444,7 +616,7 @@ export class SceneStudioPanel extends LitElement {
               `
             : html`
                 <div class="card empty">
-                  No scene sets yet. Start with a ${studioSetKindLabel("light").toLowerCase()}.
+                  No scene-sets yet. Start with a ${studioSetKindLabel("light")}.
                 </div>
               `}
       </div>
@@ -457,7 +629,7 @@ export class SceneStudioPanel extends LitElement {
         <div class="toolbar">
           <div>
             <h1>${studioSetEditorTitle("switch", this._slugLocked)}</h1>
-            <p class="muted">Entities first, then name, then on/off scenes.</p>
+            <p class="muted">Name first, then entities, then on/off scenes.</p>
           </div>
         </div>
         ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
@@ -467,9 +639,11 @@ export class SceneStudioPanel extends LitElement {
           .slugLocked=${this._slugLocked}
           .previousIds=${this._previousIds}
           .session=${this._session}
+          .step=${this._wizardStep}
           @studio-cancel=${this._cancel}
           @studio-save=${this._save}
           @studio-look-saved=${this._rememberLook}
+          @studio-step=${this._onStep}
         ></scene-studio-wizard>
       </div>
     `;
@@ -487,7 +661,7 @@ export class SceneStudioPanel extends LitElement {
           <div>
             <h1>${title}</h1>
             <p class="muted">
-              Entities, then groups, then looks, then Finish.
+              Name, then entities, then groups, then looks, then Finish.
             </p>
           </div>
         </div>
@@ -499,9 +673,11 @@ export class SceneStudioPanel extends LitElement {
           .slugLocked=${this._slugLocked}
           .previousIds=${this._previousIds}
           .session=${this._session}
+          .step=${this._wizardStep}
           @studio-cancel=${this._cancel}
           @studio-save=${this._save}
           @studio-look-saved=${this._rememberLook}
+          @studio-step=${this._onStep}
         ></scene-studio-lights-wizard>
       </div>
     `;
@@ -516,7 +692,7 @@ export class SceneStudioPanel extends LitElement {
               ${studioSetEditorTitle("advanced", this._slugLocked)}
             </h1>
             <p class="muted">
-              Entities, then custom groups, then dynamic stages per group.
+              Name, then entities, then custom groups, then looks per group.
             </p>
           </div>
         </div>
@@ -527,9 +703,11 @@ export class SceneStudioPanel extends LitElement {
           .slugLocked=${this._slugLocked}
           .previousIds=${this._previousIds}
           .session=${this._session}
+          .step=${this._wizardStep}
           @studio-cancel=${this._cancel}
           @studio-save=${this._save}
           @studio-look-saved=${this._rememberLook}
+          @studio-step=${this._onStep}
         ></scene-studio-advanced-wizard>
       </div>
     `;

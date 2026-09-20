@@ -6,11 +6,12 @@ import "./bulk";
 import { OFF_LABEL, STUDIO_WIZARD } from "./const";
 import { persistStudioScenes } from "./bind";
 import { slugify } from "./ids";
-import { newSwitchGroupDraft, switchGroupToScenes } from "./scenes";
+import { resolveWizardStep, WIZARD_STEPS } from "./route";
+import { allOffSwitchStages, newSwitchGroupDraft, switchGroupToScenes } from "./scenes";
 import { studioStyles } from "./styles";
 import type { SceneConfig, SwitchGroupDraft, StudioWizardStep } from "./types";
 
-const STEPS: StudioWizardStep[] = ["entities", "name", "stages", "review"];
+const STEPS = WIZARD_STEPS.switch;
 const STEP_LABEL: Record<StudioWizardStep, string> = {
   entities: "Entities",
   name: "Name",
@@ -37,6 +38,7 @@ export class SceneStudioWizard extends LitElement {
   @property({ type: Boolean }) public slugLocked = false;
   @property({ attribute: false }) public previousIds: string[] = [];
   @property({ type: Number }) public session = 0;
+  @property() public step: StudioWizardStep = "name";
 
   @state() private _draft: SwitchGroupDraft = newSwitchGroupDraft();
   @state() private _step: StudioWizardStep = "name";
@@ -51,9 +53,20 @@ export class SceneStudioWizard extends LitElement {
     if (this._clonedSession !== this.session) {
       this._clonedSession = this.session;
       this._draft = cloneDraft(this.draft);
-      this._step = "entities";
+      this._step = resolveWizardStep(STEPS, this.step);
       this._error = undefined;
       this._slugTouched = false;
+    }
+  }
+
+  protected updated(changed: PropertyValues): void {
+    if (
+      this._clonedSession === this.session &&
+      changed.has("step") &&
+      STEPS.includes(this.step) &&
+      this.step !== this._step
+    ) {
+      void this._leaveTo(this.step);
     }
   }
 
@@ -104,6 +117,12 @@ export class SceneStudioWizard extends LitElement {
     this._patch({ slug: slugify((ev.target as HTMLInputElement).value) });
   }
 
+  private _persistName(): void {
+    if (this._step === "name" && this._draft.name.trim() && this._draft.slug.trim()) {
+      void this._persist();
+    }
+  }
+
   private _addEntities(entityIds: string[]): void {
     const next = [...this._draft.entities];
     entityIds.forEach((entityId) => {
@@ -150,7 +169,20 @@ export class SceneStudioWizard extends LitElement {
       return;
     }
     if (mode === "explicit") {
-      const scenes = switchGroupToScenes({ ...this._draft, mode: "cumulative" });
+      const named = { ...this._draft, stage_names: this._namedStages(this._draft) };
+      if (this._draft.fresh) {
+        this._patch({
+          mode,
+          stages: allOffSwitchStages(named),
+          stage_names: this._namedStages(this._draft),
+        });
+        return;
+      }
+      const scenes = switchGroupToScenes({
+        ...named,
+        mode: "cumulative",
+        fresh: false,
+      });
       this._patch({
         mode,
         stages: scenes.map((scene) => ({
@@ -190,13 +222,21 @@ export class SceneStudioWizard extends LitElement {
 
   private _stageState(index: number, entityId: string, ev: Event): void {
     const state = (ev.target as HTMLSelectElement).value === "on" ? "on" : "off";
-    const stages = [...(this._draft.stages ?? [])];
-    const current = stages[index] ?? { name: `Stage ${index}`, switches: {} };
+    const named = { ...this._draft, stage_names: this._namedStages(this._draft) };
+    const stages = [
+      ...(this._draft.stages?.length
+        ? this._draft.stages
+        : allOffSwitchStages(named)),
+    ];
+    const current = stages[index] ?? {
+      name: named.stage_names[index] || `Stage ${index}`,
+      switches: {},
+    };
     stages[index] = {
       ...current,
       switches: { ...current.switches, [entityId]: state as SwitchState },
     };
-    this._patch({ mode: "explicit", stages });
+    this._patch({ fresh: undefined, mode: "explicit", stages });
   }
 
   private _canNext(): boolean {
@@ -212,6 +252,7 @@ export class SceneStudioWizard extends LitElement {
   private _go(step: StudioWizardStep): void {
     this._step = step;
     this._error = undefined;
+    fireEvent(this, "studio-step", { step });
   }
 
   private async _persist(): Promise<boolean> {
@@ -259,7 +300,7 @@ export class SceneStudioWizard extends LitElement {
   private _back(): void {
     const index = this._stepIndex;
     if (index > 0) {
-      void this._leaveTo(STEPS[index - 1] ?? "entities");
+      void this._leaveTo(STEPS[index - 1] ?? "name");
     } else {
       fireEvent(this, "studio-cancel");
     }
@@ -305,13 +346,14 @@ export class SceneStudioWizard extends LitElement {
     return html`
       <div class="form">
         <label class="field">
-          <span>Scene set name</span>
+          <span>Scene-set name</span>
           <input
             type="text"
             class="text-input"
             placeholder="Patio"
             .value=${this._draft.name}
             @input=${this._nameInput}
+            @blur=${this._persistName}
           />
         </label>
         <label class="field">
@@ -322,10 +364,11 @@ export class SceneStudioWizard extends LitElement {
             .value=${this._draft.slug}
             ?disabled=${this.slugLocked}
             @input=${this._slugInput}
+            @blur=${this._persistName}
           />
           <span class="help">
             Scenes will be sst_${this._draft.slug || "patio"}_00 (Off), _01, _02…
-            Changing this later would create a new scene set.
+            Changing this later would create a new scene-set.
           </span>
         </label>
       </div>

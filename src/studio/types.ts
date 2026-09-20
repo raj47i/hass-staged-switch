@@ -20,6 +20,16 @@ export interface SceneEntityState {
   effect?: string;
 }
 
+export interface StudioAdvancedGroupMeta {
+  name: string;
+  entities: string[];
+  stages?: number;
+  levelNames?: string[];
+  hex?: string;
+  brightness?: number;
+  effect?: string;
+}
+
 export interface StudioLightMeta {
   entities?: string[];
   rgb?: string[];
@@ -29,6 +39,10 @@ export interface StudioLightMeta {
   warmStages?: number;
   whiteStages?: number;
   whitesStages?: number;
+  hex?: string;
+  brightness?: number;
+  effect?: string;
+  groups?: StudioAdvancedGroupMeta[];
 }
 
 export interface SceneConfig {
@@ -48,6 +62,8 @@ export interface SwitchGroupDraft {
   mode: SwitchStageMode;
   stage_names: string[];
   stages?: Array<{ name?: string; switches: Record<string, SwitchState> }>;
+  /** New set: persist every entity off until the user edits a stage. */
+  fresh?: boolean;
 }
 
 export interface SwitchGroupSummary {
@@ -108,6 +124,10 @@ export interface AdvancedGroup {
   brightness?: number;
   effect?: string;
   stages?: number;
+  /** Level labels in order (`Min`, `Low`…). Source of truth for count. */
+  levelNames?: string[];
+  /** Raw `|`-separated editor text so trailing pipes stay while typing. */
+  levelText?: string;
   /** Per-stage, per-entity values keyed by stage number (`1`, `2`). */
   sceneLooks?: Record<string, Record<string, LightSceneLook>>;
 }

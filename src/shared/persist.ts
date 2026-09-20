@@ -1,12 +1,32 @@
+import { storageKeyAliases } from "./card-ids";
+
 export const cardStorageKey = (cardName: string, identity?: string): string =>
   `${cardName}:${identity || "default"}`;
+
+export const readStoredItem = (key: string): string | null => {
+  try {
+    const store = globalThis.localStorage;
+    if (!store) {
+      return null;
+    }
+    for (const candidate of storageKeyAliases(key)) {
+      const stored = store.getItem(candidate);
+      if (stored != null) {
+        return stored;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
 
 export const readStoredOnOff = (
   key: string,
   suffix = "power",
 ): boolean | undefined => {
   try {
-    const stored = globalThis.localStorage?.getItem(`${key}:${suffix}`);
+    const stored = readStoredItem(`${key}:${suffix}`);
     if (stored === "off") {
       return false;
     }
@@ -36,7 +56,7 @@ export const readStoredNumber = (
   suffix = "stage",
 ): number | undefined => {
   try {
-    const stored = globalThis.localStorage?.getItem(`${key}:${suffix}`);
+    const stored = readStoredItem(`${key}:${suffix}`);
     if (stored == null || stored === "") {
       return undefined;
     }
