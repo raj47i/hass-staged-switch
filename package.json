@@ -1,6 +1,6 @@
 {
   "name": "hass-scene-studio",
-  "version": "0.0.8-beta",
+  "version": "0.0.9-beta",
   "description": "Hass Scene Studio — Lovelace cards and an editor for Home Assistant scene-sets",
   "keywords": [
     "home-assistant",

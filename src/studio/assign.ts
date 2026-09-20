@@ -1,6 +1,6 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { entityDisplayName, fireEvent, isRgbCapableLight } from "../shared";
+import { entityDisplayName, fireEvent, isLightEntity } from "../shared";
 import type { HomeAssistant } from "../shared/types";
 import { DEFAULT_ADVANCED_LEVEL_TEXT } from "./advanced";
 import { STUDIO_ASSIGN } from "./const";
@@ -26,6 +26,8 @@ export interface AssignGroup {
   levelInput?: boolean;
   levels?: string;
   levelWarning?: string;
+  kindLabel?: string;
+  hint?: string;
 }
 
 type DragPayload = { entityId: string; from: string };
@@ -52,7 +54,7 @@ export class SceneStudioAssign extends LitElement {
     if (!group.rgbOnly) {
       return true;
     }
-    return isRgbCapableLight(this.hass, entityId);
+    return isLightEntity(entityId);
   }
 
   private _assign(groupId: string, entityId: string): void {
@@ -304,6 +306,9 @@ export class SceneStudioAssign extends LitElement {
                         </button>
                       `
                     : html`<strong>${group.name}</strong>`}
+                  ${group.kindLabel
+                    ? html`<span class="help">${group.kindLabel}</span>`
+                    : nothing}
                 </div>
                 <div class="pool-chips">
                   ${group.entities.map((entityId) => this._renderChip(entityId, group.id))}
@@ -316,6 +321,7 @@ export class SceneStudioAssign extends LitElement {
                       </p>`
                     : nothing
                   : html`<p class="help">Drop entities here</p>`}
+                ${group.hint ? html`<p class="help">${group.hint}</p>` : nothing}
                 ${group.showStages ? this._renderStageSelect(group) : nothing}
               </div>
             `;
@@ -323,13 +329,22 @@ export class SceneStudioAssign extends LitElement {
         </div>
         ${this.editable
           ? html`
-              <button
-                class="secondary"
-                type="button"
-                @click=${() => fireEvent(this, "studio-group-add")}
-              >
-                Add group
-              </button>
+              <div class="assign-actions">
+                <button
+                  class="secondary"
+                  type="button"
+                  @click=${() => fireEvent(this, "studio-group-add", { mode: "levels" })}
+                >
+                  Add group
+                </button>
+                <button
+                  class="secondary"
+                  type="button"
+                  @click=${() => fireEvent(this, "studio-group-add", { mode: "rgb" })}
+                >
+                  Add RGB / Smart
+                </button>
+              </div>
             `
           : nothing}
       </div>

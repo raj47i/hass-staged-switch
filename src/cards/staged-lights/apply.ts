@@ -4,11 +4,14 @@ import {
   clamp,
   isValidEntityId,
 } from "../../shared";
+import { uniqueEntityIds } from "../../shared/entities";
 import type { HomeAssistant } from "../../shared/types";
 import { activateStudioScene, lightsStudioKind, peekStudioScenes, sceneIdForLightsState } from "../../studio/bind";
 import type { SceneConfig } from "../../studio/types";
-import { hexToRgb } from "./color";
+import { hexToHue, hexToRgb } from "./color";
+import { DEFAULT_KELVIN } from "./adjust";
 import { DEFAULT_RGB_HEX, ROW_ORDER } from "./const";
+import { findLightsGroup } from "./groups";
 import { rowRoster } from "./roster";
 import {
   lightsStageCount,
@@ -63,12 +66,30 @@ export const applyLightsMode = async (
   if (!hass || !state) {
     return;
   }
+  if (options?.liveRgb && state.group?.on && config) {
+    const mode = findLightsGroup(config, state.group.id);
+    if (mode?.kind === "rgb") {
+      const ids = uniqueEntityIds(mode.entities ?? []);
+      if (ids.length) {
+        const hex = state.group.hex || mode.hex || DEFAULT_RGB_HEX;
+        await applyLightLooks(hass, ids, {
+          on: true,
+          brightness: clamp(Number(state.group.brightness) || 1, 1, 255),
+          rgb: hexToRgb(hex),
+          hs: [hexToHue(hex), 100],
+          kelvin: state.group.kelvin ?? DEFAULT_KELVIN,
+        });
+        return;
+      }
+    }
+  }
   if (config?.studio && !options?.liveRgb) {
     const scenes = options?.scenes ?? peekStudioScenes(hass);
     const id = sceneIdForLightsState(
       config.studio,
       state,
       lightsStudioKind(config.studio, scenes),
+      config,
     );
     if (await activateStudioScene(hass, id)) {
       return;
@@ -84,10 +105,13 @@ export const applyLightsMode = async (
     await turnOff(hass, [...new Set(off)]);
     const active = activeLightRow(state);
     if (active === "rgb") {
+      const hex = state.rgb?.hex || DEFAULT_RGB_HEX;
       await applyLightLooks(hass, ids.rgb, {
         on: true,
         brightness: clamp(Number(state.rgb?.brightness) || 1, 1, 255),
-        rgb: hexToRgb(state.rgb?.hex || DEFAULT_RGB_HEX),
+        rgb: hexToRgb(hex),
+        hs: [hexToHue(hex), 100],
+        kelvin: state.rgb?.kelvin ?? DEFAULT_KELVIN,
       });
       return;
     }
@@ -102,6 +126,7 @@ export const applyLightsMode = async (
       config.studio,
       state,
       lightsStudioKind(config.studio, scenes),
+      config,
     );
     try {
       if (await activateStudioScene(hass, id)) {

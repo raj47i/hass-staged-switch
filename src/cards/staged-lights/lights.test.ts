@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { clampKelvin, kelvinRangeForIds, MIN_KELVIN, MAX_KELVIN } from "./adjust";
 import { hexToHue, hexToRgb, hueToHex, rgbToHex } from "./color";
 import {
   allLightIds,
@@ -36,6 +37,7 @@ import {
 } from "./persist";
 import {
   activeLightRow,
+  exclusiveGroupState,
   exclusiveLightsState,
   isLightsHelperPayload,
   parseLightsState,
@@ -74,6 +76,44 @@ describe("lights JSON state", () => {
     expect(activeLightRow(state)).toBe("rgb");
   });
 
+  it("round-trips kelvin on the RGB helper payload", () => {
+    const state = {
+      rgb: { on: true, brightness: 180, hex: "#ff8a1d", kelvin: 2700 },
+      warm: { on: false, stage: 1 },
+      white: { on: false, stage: 1 },
+      last: "rgb" as const,
+    };
+    const raw = serializeLightsState(state);
+    expect(raw).toContain('"k":2700');
+    expect(raw.length).toBeLessThan(255);
+    expect(parseLightsState(raw)).toEqual(state);
+    expect(parseLightsState('{"r":{"o":1,"b":180,"c":"#ff8a1d"}}').rgb.kelvin).toBeUndefined();
+  });
+
+  it("clamps kelvin sliders to each bulb's advertised range", () => {
+    const hass = {
+      language: "en",
+      localize: (key: string) => key,
+      callService: async () => undefined,
+      states: {
+        "light.temp": {
+          entity_id: "light.temp",
+          state: "on",
+          attributes: {
+            supported_color_modes: ["color_temp"],
+            min_color_temp_kelvin: 2700,
+            max_color_temp_kelvin: 5000,
+          },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+    } as HomeAssistant;
+    expect(kelvinRangeForIds(hass, ["light.temp"])).toEqual({ min: 2700, max: 5000 });
+    expect(clampKelvin(2000, 2700, 5000)).toBe(2700);
+    expect(kelvinRangeForIds(hass, [])).toEqual({ min: MIN_KELVIN, max: MAX_KELVIN });
+  });
+
   it("keeps only one row on when older JSON had several", () => {
     const parsed = parseLightsState(
       '{"r":{"o":1,"b":180,"c":"#ff9800"},"w":{"o":1,"s":2},"n":{"o":1,"s":1}}',
@@ -95,6 +135,15 @@ describe("lights JSON state", () => {
     expect(serializeLightsState(undefined)).toContain('"o":1');
     expect(exclusiveLightsState(undefined, "white")?.white.on).toBe(true);
     expect(exclusiveLightsState(undefined, "white")?.last).toBe("white");
+    const grouped = exclusiveGroupState(undefined, "rgb", 2);
+    expect(grouped.rgb.on).toBe(false);
+    expect(grouped.group).toEqual({ id: "rgb", on: true, stage: 2 });
+    expect(exclusiveGroupState(grouped, undefined).group).toEqual({
+      id: "rgb",
+      on: false,
+      stage: 2,
+    });
+    expect(exclusiveLightsState(grouped, "warm").group).toBeUndefined();
   });
 
   it("turns a different row on exclusively", () => {
@@ -341,6 +390,12 @@ describe("lights roster", () => {
     expect(isLightsCardConfig("nope")).toBe(false);
     expect(isLightsCardConfig({ type: "custom:scene-studio-room-lights-card" })).toBe(true);
     expect(isEmptyLightsConfig(config)).toBe(false);
+    expect(
+      isEmptyLightsConfig({
+        type: "custom:scene-studio-room-lights-mini-card",
+        groups: [{ id: "fun", name: "Fun", stages: [{ name: "Min", scene: "sla_movie_01" }] }],
+      }),
+    ).toBe(false);
     expect(
       isEmptyLightsConfig({
         type: "custom:scene-studio-room-lights-card",

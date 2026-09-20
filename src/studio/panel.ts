@@ -481,8 +481,8 @@ export class SceneStudioPanel extends LitElement {
           <span class="kind">Lights</span>
           <strong>${studioSetKindLabel("advanced")}</strong>
           <p class="muted">
-            Add and edit custom groups, then extra per-entity scenes if you
-            need them.
+            Custom groups, including multiple RGB / Smart color groups, then
+            extra per-entity scenes if you need them.
           </p>
         </button>
         <button class="create-card" type="button" @click=${this._createSwitch}>

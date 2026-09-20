@@ -331,6 +331,65 @@ const lightsStyles = css`
     cursor: pointer;
   }
 
+  .hue,
+  .kelvin {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 14px;
+    margin: 0;
+    appearance: none;
+    border-radius: 999px;
+    outline: none;
+  }
+
+  .hue {
+    background: linear-gradient(
+      to right,
+      #ff0000,
+      #ffff00,
+      #00ff00,
+      #00ffff,
+      #0000ff,
+      #ff00ff,
+      #ff0000
+    );
+  }
+
+  .kelvin {
+    background: linear-gradient(to right, #ff8a1d, #f3eadc, #c4e1ff);
+  }
+
+  .hue::-webkit-slider-thumb,
+  .kelvin::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--current-color, #ff8a1d);
+    box-shadow: 0 0 0 1px color-mix(in srgb, #000 25%, transparent);
+    cursor: pointer;
+  }
+
+  .hue::-moz-range-thumb,
+  .kelvin::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--current-color, #ff8a1d);
+    box-shadow: 0 0 0 1px color-mix(in srgb, #000 25%, transparent);
+    cursor: pointer;
+  }
+
+  .mode-controls.power-off .hue,
+  .mode-controls.power-off .kelvin {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
   .presets {
     display: flex;
     flex-wrap: nowrap;

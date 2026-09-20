@@ -47,29 +47,97 @@ const isControlEntity = (entityId: string): boolean =>
 export const isLightEntity = (entityId: string): boolean =>
   domainOf(entityId) === "light";
 
-const RGB_COLOR_MODES = new Set(["rgb", "rgbw", "rgbww", "hs", "xy"]);
+export type LightAdjustKind = "rgb" | "hs" | "temp" | "brightness" | "onoff";
+
+const RGB_COLOR_MODES = new Set(["rgb", "rgbw", "rgbww", "xy"]);
+const HS_COLOR_MODES = new Set(["hs"]);
+const TEMP_COLOR_MODES = new Set(["color_temp"]);
+const BRIGHT_COLOR_MODES = new Set(["brightness", "white"]);
+
+const modeList = (stateObj?: { attributes?: Record<string, unknown> }): string[] => {
+  const modes = stateObj?.attributes?.supported_color_modes;
+  return Array.isArray(modes) ? modes.map((mode) => String(mode)) : [];
+};
+
+const hasMode = (modes: string[], set: Set<string>): boolean =>
+  modes.some((mode) => set.has(mode));
+
+export const lightAdjustKind = (
+  hass: HomeAssistant | undefined,
+  entityId: string,
+): LightAdjustKind => {
+  if (!isValidEntityId(entityId) || !isLightEntity(entityId)) {
+    return "onoff";
+  }
+  const stateObj = hass?.states[entityId];
+  if (!stateObj) {
+    return "rgb";
+  }
+  const modes = modeList(stateObj);
+  if (modes.length) {
+    if (hasMode(modes, RGB_COLOR_MODES)) {
+      return "rgb";
+    }
+    if (hasMode(modes, HS_COLOR_MODES)) {
+      return "hs";
+    }
+    if (hasMode(modes, TEMP_COLOR_MODES)) {
+      return "temp";
+    }
+    if (hasMode(modes, BRIGHT_COLOR_MODES)) {
+      return "brightness";
+    }
+    return "onoff";
+  }
+  if (stateObj.attributes.rgb_color || stateObj.attributes.xy_color) {
+    return "rgb";
+  }
+  if (stateObj.attributes.hs_color) {
+    return "hs";
+  }
+  if (
+    stateObj.attributes.color_temp != null ||
+    stateObj.attributes.color_temp_kelvin != null
+  ) {
+    return "temp";
+  }
+  if (stateObj.attributes.brightness != null) {
+    return "brightness";
+  }
+  return "onoff";
+};
+
+export const rosterAdjustKind = (
+  hass: HomeAssistant | undefined,
+  entityIds: string[] = [],
+): LightAdjustKind => {
+  const kinds = entityIds
+    .filter((entityId) => isValidEntityId(entityId) && isLightEntity(entityId))
+    .map((entityId) => lightAdjustKind(hass, entityId));
+  if (kinds.includes("rgb")) {
+    return "rgb";
+  }
+  if (kinds.includes("hs")) {
+    return "hs";
+  }
+  if (kinds.includes("temp")) {
+    return "temp";
+  }
+  if (kinds.includes("brightness")) {
+    return "brightness";
+  }
+  return kinds.length ? "onoff" : "rgb";
+};
 
 export const isRgbCapableLight = (
   hass: HomeAssistant | undefined,
   entityId: string,
-): boolean => {
-  if (!isValidEntityId(entityId) || !isLightEntity(entityId)) {
-    return false;
-  }
-  const stateObj = hass?.states[entityId];
-  if (!stateObj) {
-    return true;
-  }
-  const modes = stateObj.attributes.supported_color_modes;
-  if (Array.isArray(modes) && modes.some((mode) => RGB_COLOR_MODES.has(String(mode)))) {
-    return true;
-  }
-  return Boolean(
-    stateObj.attributes.rgb_color ||
-      stateObj.attributes.hs_color ||
-      stateObj.attributes.xy_color,
-  );
-};
+): boolean => lightAdjustKind(hass, entityId) === "rgb";
+
+export const isAdjustableLight = (
+  hass: HomeAssistant | undefined,
+  entityId: string,
+): boolean => isLightEntity(entityId) && lightAdjustKind(hass, entityId) !== "onoff";
 
 export const isToggleEntity = (
   hass: HomeAssistant,

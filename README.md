@@ -105,7 +105,7 @@ A named set can be saved before any entities are added. That writes a stub Off s
 
 Groups:
 
-1. **RGB** — color lights, one shared color and brightness, optional effect.
+1. **RGB** — any lights you assign. New entities that are full-color still auto-join RGB; drag dimmers, hue, or temperature lights in yourself. RGB bulbs share color presets, a picker, and brightness. Hue lights get a hue slider plus brightness. Color-temperature lights get a kelvin slider (clamped to the bulb’s range) plus brightness. Dimmers get brightness only.
 2. **Warm** — 2–5 intensity levels. Two lights allow 2–3 levels; three or more allow 2–5. Default is three: **Min / Mid / Max**. Five levels are **Min / Low / Mid / High / Max**.
 3. **White** — same level counts and names as Warm.
 
@@ -129,7 +129,11 @@ Scene ids use `off`, `rgb`, `t1`…`t4`.
 
 ### Lights scene-set : Advanced
 
-Build your own groups. Groups can overlap. Each group has editable **level names** instead of a 2–5 dropdown.
+Build your own groups. Groups can overlap.
+
+**RGB / Smart** groups are live-tweaked looks, like Simple RGB. You can have as many as you need (strip, lamp, accent). Members can be RGB, hue, color-temperature, or dimmable lights; the card only shows the sliders those lights support.
+
+**Level** groups have editable **level names** instead of a 2–5 dropdown.
 
 - Type names split by `|`. Default: `Min|Low|Mid|High|Max`.
 - Names become an ordered list (`0` = first name, `4` = fifth). Live-edit looks stay on that index when you rename a level.
@@ -163,7 +167,7 @@ Every kind starts on **Name** so the set can be saved at once. The slug becomes 
 | Step | Lights (all three) | Switches |
 | --- | --- | --- |
 | Entities | Add lights and switches. Area and device pickers available. | Same, on/off entities. |
-| Groups | Assign members to RGB / Warm / White, or custom Advanced groups. | — |
+| Groups | Assign members to RGB / Warm / White, or custom Advanced groups. RGB / Smart accepts any lights; controls follow what those lights can do. | — |
 | Scenes | — | Name stages and set on/off (new sets start off). |
 | Live edit | Tap a look, change members, Save. | — |
 | Finish | Review the exclusive scenes. | Review. |
@@ -188,8 +192,8 @@ On first load, dashboard cards infer the current look from the live lights when 
 
 Add this on a room dashboard and pick a scene-set. The card becomes:
 
-- **Room Lights: Mini** for Lights : Simple and Lights : Minimal
-- **Room Switches** for Switches and Lights : Advanced
+- **Room Lights: Mini** for Lights : Simple, Lights : Minimal, and Lights : Advanced
+- **Room Switches** for Switches
 
 The heading defaults to the scene-set name (a trailing “lights” / “switches” is stripped). In the card editor you can change the title, clear it to hide the heading, and align it **Left / Middle / Right**. Alignment is disabled when the title is empty.
 
@@ -218,10 +222,12 @@ You can add Room Lights: Mini or Room Switches yourself and set the same `studio
 
 ### Scene Studio - Room Lights: Mini
 
-Two rows:
+Two rows for Simple / Minimal:
 
 1. **Mode** — RGB, Warm, and White (only the rows you configured). Tap the active mode to turn it off; tap again or another mode to turn that one on.
-2. **Controls** — RGB shows brightness (1–100%), presets, and the color picker. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
+2. **Controls** — RGB shows brightness (1–100%) plus color, hue, or temperature only when the group’s lights support that. Warm or White shows that row’s intensity stages. While every mode is off, the last mode’s controls stay visible but greyed out.
+
+Lights : Advanced uses the same Mini card, but the mode buttons are the **named groups** (and extra looks). Rows hold at most 3 groups and never a leftover single — 6 groups become two rows of 3, 7 become 3+2+2 — and the card grows downward. Selecting a level group shows that group’s intensity stages. Selecting an RGB / Smart group shows color, hue, temperature, or brightness for those lights. A custom look is just the button.
 
 On a scene-set card, **Show entity buttons** is available and off until you enable it. A mini card configured only with helpers has no chip option.
 
@@ -240,7 +246,7 @@ Only one of RGB, Warm, or White can be on. Entity chips stay hidden unless **Sho
 
 ### Scene Studio - Room Switches
 
-Staged Power + look buttons. Bound to a Switches or Advanced lights scene-set, or configured by hand with an `input_number` helper (see [Manual helper cards](#manual-helper-cards)).
+Staged Power + look buttons. Bound to a Switches scene-set, or configured by hand with an `input_number` helper (see [Manual helper cards](#manual-helper-cards)).
 
 Taps on a scene-set card call `scene.turn_on`. The leftmost **Power** button is Off / Default.
 
@@ -448,7 +454,7 @@ Or just `switch.patio_fan`.
 
 Three exclusive rows, stored in **one** `input_text` as a short JSON string:
 
-1. **RGB** — Power labeled RGB, a 1–100% brightness slider, then color presets. Only RGB-capable lights.
+1. **RGB** — Power labeled RGB and a 1–100% brightness slider. Color presets appear for RGB lights; hue or temperature sliders appear when that is all the lights can do.
 2. **Warm** — at least two lights or switches or the row stays hidden. Two entities allow 2–3 stages; three or more allow 2–5. Names are **Min / Low / Mid / High / Max**. Each stage is an on/off mix.
 3. **White** — the same limits and names.
 
@@ -475,9 +481,9 @@ white:
 
 If you omit `warm_stages` / `white_stages`, each intensity is cumulative. The editor writes the maps so you can flip any light on or off per stage. Two lights default to Min / Mid / Max. Three or more default to all five names.
 
-The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d"},"w":{"o":0,"s":2},"n":{"o":0,"s":1},"l":"r"}`. `l` is the last RGB / Warm / White mode. If the helper is missing, the card still remembers the last values in this browser.
+The stored payload looks like `{"r":{"o":1,"b":180,"c":"#ff8a1d","k":4000},"w":{"o":0,"s":2},"n":{"o":0,"s":1},"l":"r"}`. `l` is the last RGB / Warm / White mode. `k` is kelvin when you last set temperature; older helpers without `k` still load. If the helper is missing, the card still remembers the last values in this browser.
 
-Power off keeps the last row, RGB brightness and color, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
+Power off keeps the last row, RGB brightness, color, and temperature, and Warm/White intensity. Turning that row back on restores it and turns the other two rows off.
 
 RGB, Warm, and White always turn their lights on and off. **Show entity buttons** is off by default.
 
@@ -489,7 +495,7 @@ RGB, Warm, and White always turn their lights on and off. **Show entity buttons*
 | `studio` | string | no | Scene-set slug. Rows and stages come from that set |
 | `entity` | string | recommended | `input_text` that stores the JSON state |
 | `stages` | number | no | Fallback stage count when a row has no map yet |
-| `rgb` | list | no | RGB-capable lights |
+| `rgb` | list | no | Lights for the RGB / Smart row (RGB, hue, temperature, or dimmable) |
 | `warm` | list | no | Lights or switches. Hidden with fewer than 2 |
 | `white` | list | no | Lights or switches. Hidden with fewer than 2 |
 | `warm_stages` | list | no | Per-intensity on/off map (2–5) |
@@ -501,7 +507,7 @@ RGB, Warm, and White always turn their lights on and off. **Show entity buttons*
 | `show_switches` | boolean | no | Default `false`. Show every entity once at the bottom |
 | `hidden_entities` | list | no | Hidden when `show_switches` is on |
 
-RGB items must be color lights. Warm/White items are a light or switch id, or `{ entity, name, icon, hide }`.
+RGB items are a light id (color, hue, temperature, or dimmer). Warm/White items are a light or switch id, or `{ entity, name, icon, hide }`.
 
 ### Room Lights: Mini with a helper
 
@@ -548,7 +554,7 @@ Requirements: Node.js 20 or newer.
 HACS loads `hass-scene-studio.js` from GitHub release assets (`hacs.json`).
 
 1. Update `version` in `package.json` and `PACKAGE_VERSION` in `src/shared/const.ts`.
-2. Commit and tag, for example `v0.0.8-beta`.
+2. Commit and tag, for example `v0.0.9-beta`.
 3. Push the tag. The release workflow builds the bundle and attaches `hass-scene-studio.js`.
 
 ## License

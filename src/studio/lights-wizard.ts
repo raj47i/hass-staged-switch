@@ -7,11 +7,18 @@ import {
   friendlyActionError,
   isLightEntity,
   isRgbCapableLight,
+  rosterAdjustKind,
   isValidEntityId,
   withTimeout,
 } from "../shared";
 import type { HomeAssistant } from "../shared/types";
-import { normalizeHex } from "../cards/staged-lights/color";
+import { hexToHue, hueToHex, normalizeHex } from "../cards/staged-lights/color";
+import {
+  clampKelvin,
+  DEFAULT_KELVIN,
+  kelvinRangeForIds,
+  kelvinToHex,
+} from "../cards/staged-lights/adjust";
 import "./assign";
 import "./bulk";
 import {
@@ -280,6 +287,22 @@ export class SceneStudioLightsWizard extends LitElement {
     this._patch({
       brightness: asRgbPercent((ev.target as HTMLInputElement).value),
     });
+  }
+
+  private _hueInput(ev: Event): void {
+    this._patch({
+      hex: hueToHex(Number((ev.target as HTMLInputElement).value)),
+    });
+  }
+
+  private _kelvinInput(ev: Event): void {
+    const range = kelvinRangeForIds(this.hass, rowIds(this._draft, "rgb"));
+    const kelvin = clampKelvin(
+      (ev.target as HTMLInputElement).value,
+      range.min,
+      range.max,
+    );
+    this._patch({ kelvin, hex: kelvinToHex(kelvin) });
   }
 
   private _canNext(): boolean {
@@ -740,6 +763,10 @@ export class SceneStudioLightsWizard extends LitElement {
             name: STUDIO_ROW_META[row].label,
             entities: rowIds(this._draft, row),
             rgbOnly: row === "rgb",
+            hint:
+              row === "rgb"
+                ? "Any lights. RGB keeps color presets; hue, temperature, and dimmers only get the sliders they support."
+                : undefined,
             showStages: row !== "rgb",
             minEntities: row === "whites" ? MIN_WHITES_ENTITIES : 2,
             stages:
@@ -786,53 +813,104 @@ export class SceneStudioLightsWizard extends LitElement {
 
   private _renderRgbControls(music = false) {
     const ids = rowIds(this._draft, "rgb");
+    const kind = rosterAdjustKind(this.hass, ids);
+    const hue = hexToHue(this._draft.hex);
+    const kelvinRange = kelvinRangeForIds(this.hass, ids);
+    const kelvin = clampKelvin(
+      this._draft.kelvin ?? DEFAULT_KELVIN,
+      kelvinRange.min,
+      kelvinRange.max,
+    );
     return html`
-      <div class="presets">
-        ${this._presets.map(
-          (hex, index) => html`
-            <label
-              class="swatch-edit ${this._draft.hex.toLowerCase() === hex.toLowerCase()
-                ? "active"
-                : ""}"
-              title=${hex}
-            >
+      ${kind === "rgb"
+        ? html`
+            <div class="presets">
+              ${this._presets.map(
+                (hex, index) => html`
+                  <label
+                    class="swatch-edit ${this._draft.hex.toLowerCase() === hex.toLowerCase()
+                      ? "active"
+                      : ""}"
+                    title=${hex}
+                  >
+                    <input
+                      type="color"
+                      .value=${normalizeHex(hex, "#ff8a1d")}
+                      @input=${(ev: Event) => this._editPreset(index, ev)}
+                      @click=${() => this._preset(hex)}
+                    />
+                  </label>
+                `,
+              )}
+              <label class="field compact">
+                <span>Custom</span>
+                <input
+                  type="color"
+                  .value=${normalizeHex(this._draft.hex, "#ff8a1d")}
+                  @input=${this._hexInput}
+                />
+              </label>
+            </div>
+          `
+        : nothing}
+      ${kind !== "onoff"
+        ? html`
+            <label class="field">
+              <span>Brightness · ${asRgbPercent(this._draft.brightness)}%</span>
               <input
-                type="color"
-                .value=${normalizeHex(hex, "#ff8a1d")}
-                @input=${(ev: Event) => this._editPreset(index, ev)}
-                @click=${() => this._preset(hex)}
+                type="range"
+                min="1"
+                max="100"
+                .value=${String(asRgbPercent(this._draft.brightness))}
+                @input=${this._brightnessInput}
               />
             </label>
-          `,
-        )}
-        <label class="field compact">
-          <span>Custom</span>
-          <input
-            type="color"
-            .value=${normalizeHex(this._draft.hex, "#ff8a1d")}
-            @input=${this._hexInput}
-          />
-        </label>
-      </div>
-      <label class="field">
-        <span>Brightness · ${asRgbPercent(this._draft.brightness)}%</span>
-        <input
-          type="range"
-          min="1"
-          max="100"
-          .value=${String(asRgbPercent(this._draft.brightness))}
-          @input=${this._brightnessInput}
-        />
-      </label>
-      <label class="field effect-card">
-        <span>Effect</span>
-        <select .value=${this._draft.effect ?? ""} @change=${this._effectInput}>
-          ${studioEffectOptions(this.hass, ids).map(
-            (option) => html`<option value=${option.id}>${option.label}</option>`,
-          )}
-        </select>
-      </label>
-      ${music
+          `
+        : nothing}
+      ${kind === "hs"
+        ? html`
+            <label class="field">
+              <span>Hue · ${hue}°</span>
+              <input
+                class="hue"
+                type="range"
+                min="0"
+                max="360"
+                .value=${String(hue)}
+                @input=${this._hueInput}
+              />
+            </label>
+          `
+        : nothing}
+      ${kind === "temp"
+        ? html`
+            <label class="field">
+              <span>Temperature · ${kelvin}K</span>
+              <input
+                class="kelvin"
+                type="range"
+                min=${kelvinRange.min}
+                max=${kelvinRange.max}
+                step="50"
+                .value=${String(kelvin)}
+                @input=${this._kelvinInput}
+              />
+            </label>
+          `
+        : nothing}
+      ${kind === "rgb"
+        ? html`
+            <label class="field effect-card">
+              <span>Effect</span>
+              <select .value=${this._draft.effect ?? ""} @change=${this._effectInput}>
+                ${studioEffectOptions(this.hass, ids).map(
+                  (option) => html`<option value=${option.id}>${option.label}</option>`,
+                )}
+              </select>
+            </label>
+          `
+        : nothing}
+      ${kind === "rgb" && music
         ? html`
             <label class="music-sync">
               <input

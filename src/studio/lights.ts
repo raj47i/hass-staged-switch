@@ -1,7 +1,12 @@
-import { isLightEntity, isRgbCapableLight, uniqueEntityIds } from "../shared/entities";
+import {
+  isLightEntity,
+  lightAdjustKind,
+  uniqueEntityIds,
+} from "../shared/entities";
 import { clamp } from "../shared/hass";
 import type { HomeAssistant } from "../shared/types";
-import { hexToRgb, rgbToHex } from "../cards/staged-lights/color";
+import { kelvinToHex, DEFAULT_KELVIN } from "../cards/staged-lights/adjust";
+import { hexToHue, hexToRgb, hueToHex, rgbToHex } from "../cards/staged-lights/color";
 import {
   DEFAULT_LIGHT_STAGES,
   DEFAULT_RGB_BRIGHTNESS,
@@ -32,6 +37,27 @@ export const DEFAULT_RGB_PERCENT = brightnessToPercent(DEFAULT_RGB_BRIGHTNESS);
 
 export const asRgbPercent = (value: unknown): number =>
   parseRgbPercent(value) ?? DEFAULT_RGB_PERCENT;
+
+export const colorFromSceneEntity = (
+  look?: SceneEntityState,
+): Pick<LightSceneLook, "brightness" | "hex" | "kelvin" | "effect"> => {
+  if (!look || look.state !== "on") {
+    return {};
+  }
+  const hex = look.rgb_color
+    ? rgbToHex(look.rgb_color)
+    : look.hs_color
+      ? hueToHex(Number(look.hs_color[0]) || 0)
+      : look.color_temp_kelvin
+        ? kelvinToHex(look.color_temp_kelvin)
+        : undefined;
+  return {
+    brightness: look.brightness ? brightnessToPercent(look.brightness) : undefined,
+    hex,
+    kelvin: look.color_temp_kelvin,
+    effect: look.effect ?? "",
+  };
+};
 
 export const newLightGroupDraft = (
   name = "",
@@ -456,6 +482,7 @@ export const defaultEntityLook = (
       state: "on",
       brightness: asRgbPercent(draft.brightness),
       hex: draft.hex || DEFAULT_RGB_HEX,
+      kelvin: draft.kelvin,
       effect: draft.effect ?? "",
     };
   }
@@ -490,6 +517,7 @@ export const entityLookForSlot = (
       state: override?.state === "on" ? "on" : "off",
       brightness: asRgbPercent(draft.brightness),
       hex: draft.hex || DEFAULT_RGB_HEX,
+      kelvin: draft.kelvin,
       effect: draft.effect ?? "",
     };
   }
@@ -523,11 +551,7 @@ export const draftPatchFromSavedScene = (
     if (look?.state === "on") {
       slotLooks[entityId] = {
         state: "on",
-        brightness: look.brightness
-          ? brightnessToPercent(look.brightness)
-          : undefined,
-        hex: look.rgb_color ? rgbToHex(look.rgb_color) : undefined,
-        effect: look.effect ?? "",
+        ...colorFromSceneEntity(look),
       };
       return;
     }
@@ -543,6 +567,7 @@ export const draftPatchFromSavedScene = (
     if (sample) {
       patch.brightness = asRgbPercent(sample.brightness);
       patch.hex = sample.hex || draft.hex || DEFAULT_RGB_HEX;
+      patch.kelvin = sample.kelvin ?? draft.kelvin;
       patch.effect = sample.effect ?? "";
     }
   }
@@ -560,10 +585,17 @@ export const lookToSceneState = (
   const next: SceneEntityState = { state: "on" };
   if (isLightEntity(entityId)) {
     next.brightness = percentToBrightness(asRgbPercent(look.brightness));
-    if (look.hex && isRgbCapableLight(hass, entityId)) {
+    const kind = lightAdjustKind(hass, entityId);
+    if (look.hex && kind === "rgb") {
       next.rgb_color = hexToRgb(look.hex);
     }
-    if (look.effect?.trim()) {
+    if (look.hex && kind === "hs") {
+      next.hs_color = [hexToHue(look.hex), 100];
+    }
+    if (kind === "temp") {
+      next.color_temp_kelvin = look.kelvin ?? DEFAULT_KELVIN;
+    }
+    if (look.effect?.trim() && kind === "rgb") {
       next.effect = look.effect.trim();
     }
   }
@@ -643,6 +675,7 @@ export const lightGroupToScenes = (
               whiteStages: draft.whiteStages,
               whitesStages: draft.whitesStages,
               hex: draft.hex,
+              kelvin: draft.kelvin,
               brightness: draft.brightness,
               effect: draft.effect,
             },
@@ -663,6 +696,7 @@ export const lightGroupToScenes = (
       draft.whitesStages ??
       (whites.length ? whitesStageCount(whites, draft.whitesStages) : undefined),
     hex: draft.hex,
+    kelvin: draft.kelvin,
     brightness: draft.brightness,
     effect: draft.effect,
   };
@@ -735,6 +769,7 @@ export const draftFromLightScenes = (
   const white: string[] = [...(meta?.white ?? [])];
   const whites: string[] = [...(meta?.whites ?? [])];
   let hex = meta?.hex || DEFAULT_RGB_HEX;
+  let kelvin = meta?.kelvin;
   let brightness = meta?.brightness ?? DEFAULT_RGB_PERCENT;
   let effect = meta?.effect ?? "";
   let warmStages = meta?.warmStages ?? 0;
@@ -792,18 +827,18 @@ export const draftFromLightScenes = (
       }
       slotLooks[entityId] = {
         state: "on",
-        brightness: look.brightness
-          ? brightnessToPercent(look.brightness)
-          : undefined,
-        hex: look.rgb_color ? rgbToHex(look.rgb_color) : undefined,
-        effect: look.effect ?? "",
+        ...colorFromSceneEntity(look),
       };
       if (parsed.slot === "rgb") {
-        if (look.brightness) {
-          brightness = brightnessToPercent(look.brightness);
+        const color = colorFromSceneEntity(look);
+        if (color.brightness) {
+          brightness = color.brightness;
         }
-        if (look.rgb_color) {
-          hex = rgbToHex(look.rgb_color);
+        if (color.hex) {
+          hex = color.hex;
+        }
+        if (color.kelvin) {
+          kelvin = color.kelvin;
         }
         if (look.effect) {
           effect = look.effect;
@@ -824,6 +859,7 @@ export const draftFromLightScenes = (
     white: uniqueEntityIds(white),
     whites: uniqueEntityIds(whites),
     hex,
+    kelvin,
     presets: [...STUDIO_RGB_PRESETS],
     brightness,
     effect,

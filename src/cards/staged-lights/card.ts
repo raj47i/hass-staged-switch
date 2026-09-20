@@ -20,7 +20,15 @@ import {
   setInputText,
 } from "../../shared";
 import type { HomeAssistant, LovelaceCard, SwitchTarget } from "../../shared/types";
-import { normalizeHex } from "./color";
+import {
+  adjustKindForIds,
+  DEFAULT_KELVIN,
+  kelvinRangeForIds,
+  kelvinToHex,
+  renderAdjustControls,
+} from "./adjust";
+import { hueToHex, normalizeHex } from "./color";
+import { rowEntityIds } from "./apply";
 import { lightsRowMuted, resolveRgbPresets, rowPowerIcons, rowStageIcon } from "./look";
 import {
   CARD_LEGACY_NAME,
@@ -442,53 +450,29 @@ export class StagedLightsCard extends LitElement implements LovelaceCard {
 
   private _renderRgbControls(showcase = false, rowIndex = 1) {
     const rgb = this._current.rgb;
-    const color = rgb?.hex || DEFAULT_RGB_HEX;
-    const percent = displayRgbPercent(rgb?.brightness ?? 1, this._rgbDragPercent);
-    const presets = resolveRgbPresets(this._resolved);
-    const selectedPreset = presets.find(
-      (preset) => normalizeHex(preset, "") === normalizeHex(color, ""),
-    );
+    const ids = rowEntityIds(this._resolved, "rgb");
+    const kelvinRange = kelvinRangeForIds(this.hass, ids);
     return html`
-      <div
-        class="mode-controls rgb-controls ${lightsRowMuted(rgb?.on) ? "power-off" : ""}"
-        style="--current-color: ${color}; grid-row: ${rowIndex}"
-        aria-label="RGB brightness and color"
-      >
-        <input
-          class="brightness"
-          type="range"
-          min="1"
-          max="100"
-          .value=${String(percent)}
-          aria-label="RGB brightness"
-          @input=${showcase ? undefined : this._onBrightnessInput}
-          @change=${showcase ? undefined : this._onBrightness}
-        />
-        <span class="brightness-value" aria-hidden="true">${percent}%</span>
-        <div class="presets">
-          ${presets.map(
-            (hex) => html`
-              <button
-                class="swatch ${selectedPreset === hex ? "selected" : ""}"
-                type="button"
-                style="background: ${hex}"
-                aria-label="RGB color ${hex}"
-                aria-pressed=${selectedPreset === hex}
-                @click=${() => this._onPreset(hex)}
-              ></button>
-            `,
-          )}
-        </div>
-        <label class="picker-wrap ${selectedPreset ? "" : "selected"}" title="Custom color">
-          <button class="picker-button" type="button" tabindex="-1" aria-hidden="true"></button>
-          <input
-            type="color"
-            .value=${color}
-            aria-label="Custom RGB color"
-            ?disabled=${showcase}
-            @input=${showcase ? undefined : this._onCustomColor}
-          />
-        </label>
+      <div style="grid-row: ${rowIndex}">
+        ${renderAdjustControls({
+          kind: showcase ? "rgb" : adjustKindForIds(this.hass, ids),
+          label: "RGB",
+          muted: lightsRowMuted(rgb?.on),
+          percent: displayRgbPercent(rgb?.brightness ?? 1, this._rgbDragPercent),
+          hex: rgb?.hex || DEFAULT_RGB_HEX,
+          kelvin: rgb?.kelvin ?? DEFAULT_KELVIN,
+          minKelvin: kelvinRange.min,
+          maxKelvin: kelvinRange.max,
+          presets: resolveRgbPresets(this._resolved),
+          showcase,
+          onBrightnessInput: (ev) => this._onBrightnessInput(ev),
+          onBrightness: (ev) => this._onBrightness(ev),
+          onHue: (hue) => this._setRgb({ on: true, hex: hueToHex(hue) }),
+          onKelvin: (kelvin) =>
+            this._setRgb({ on: true, kelvin, hex: kelvinToHex(kelvin) }),
+          onPreset: (hex) => this._onPreset(hex),
+          onCustomColor: (ev) => this._onCustomColor(ev),
+        })}
       </div>
     `;
   }

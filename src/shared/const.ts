@@ -1,4 +1,4 @@
-export const PACKAGE_VERSION = "0.0.8-beta";
+export const PACKAGE_VERSION = "0.0.9-beta";
 export const PROJECT_TITLE = "Hass Scene Studio";
 export const PACKAGE_TITLE = "Scene Studio";
 export const pickerName = (name: string): string => `${PACKAGE_TITLE} - ${name}`;

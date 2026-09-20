@@ -1,6 +1,6 @@
 import { LitElement, css, html, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { DOCUMENTATION_URL, registerLovelaceCard } from "../shared";
+import { DOCUMENTATION_URL, isInEditorPreview, registerLovelaceCard } from "../shared";
 import type { HomeAssistant, LovelaceCard, LovelaceCardConfig } from "../shared/types";
 import {
   isStudioPanelHost,
@@ -11,7 +11,12 @@ import {
   studioScenesVersion,
   studioSetOptions,
 } from "./bind";
-import { STUDIO_CARD, STUDIO_CARD_TITLE, STUDIO_CARD_TYPE } from "./const";
+import {
+  STUDIO_CARD,
+  STUDIO_CARD_TITLE,
+  STUDIO_CARD_TYPE,
+  STUDIO_RGB_PRESETS,
+} from "./const";
 import type { SwitchGroupSummary } from "./types";
 import "./card-editor";
 import "./panel";
@@ -114,9 +119,78 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
     });
   }
 
+  private _showShowcase(): boolean {
+    return isInEditorPreview(this) && !this._visibleSets().length;
+  }
+
+  private _renderShowcase() {
+    return html`
+      <ha-card class="showcase" aria-hidden="true">
+        <div class="sample">
+          <section class="sample-block">
+            <div class="sample-head">
+              <h2 class="title">Living</h2>
+              <span class="kind">Lights</span>
+            </div>
+            <div class="modes">
+              <span class="mode on">
+                <ha-icon .icon=${"mdi:palette"}></ha-icon>
+                RGB
+              </span>
+              <span class="mode">
+                <ha-icon .icon=${"mdi:lamp"}></ha-icon>
+                Warm
+              </span>
+              <span class="mode">
+                <ha-icon .icon=${"mdi:white-balance-sunny"}></ha-icon>
+                White
+              </span>
+            </div>
+            <div class="rgb-row">
+              <div class="bar"><i></i></div>
+              <span class="pct">71%</span>
+              <div class="swatches">
+                ${STUDIO_RGB_PRESETS.map(
+                  (hex, index) => html`
+                    <span
+                      class="swatch ${index === 0 ? "current" : ""}"
+                      style="--swatch:${hex}"
+                    ></span>
+                  `,
+                )}
+              </div>
+            </div>
+          </section>
+          <section class="sample-block">
+            <div class="sample-head">
+              <h2 class="title">Patio</h2>
+              <span class="kind">Switches</span>
+            </div>
+            <div class="stages">
+              <span class="power on">
+                <ha-icon .icon=${"mdi:power"}></ha-icon>
+              </span>
+              <span class="track">
+                <i></i>
+                <span class="dot done"></span>
+                <span class="dot done"></span>
+                <span class="dot current"></span>
+                <span class="dot"></span>
+              </span>
+              <span class="stage-name">Heater</span>
+            </div>
+          </section>
+        </div>
+      </ha-card>
+    `;
+  }
+
   protected render() {
     if (this._showEditor()) {
       return html`<scene-studio-panel .hass=${this.hass}></scene-studio-panel>`;
+    }
+    if (this._showShowcase()) {
+      return this._renderShowcase();
     }
     const sets = this._visibleSets();
     if (!sets.length) {
@@ -132,15 +206,15 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
     return html`
       <div class="stack">
         ${sets.map((set) =>
-          set.kind === "light" || set.kind === "minimal"
-            ? html`<scene-studio-room-lights-mini-card
+          set.kind === "switch"
+            ? html`<scene-studio-room-switches-card
                 data-studio=${set.slug}
                 data-kind=${set.kind}
-              ></scene-studio-room-lights-mini-card>`
-            : html`<scene-studio-room-switches-card
+              ></scene-studio-room-switches-card>`
+            : html`<scene-studio-room-lights-mini-card
                 data-studio=${set.slug}
                 data-kind=${set.kind}
-              ></scene-studio-room-switches-card>`,
+              ></scene-studio-room-lights-mini-card>`,
         )}
       </div>
     `;
@@ -170,6 +244,184 @@ export class SceneStudioCard extends LitElement implements LovelaceCard {
       line-height: 20px;
       color: var(--secondary-text-color);
     }
+
+    .showcase {
+      overflow: hidden;
+    }
+
+    .sample {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px 16px 16px;
+    }
+
+    .sample-block {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sample-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: var(--ha-font-size-m, 14px);
+      font-weight: var(--ha-font-weight-medium, 500);
+      line-height: var(--ha-line-height-condensed, 20px);
+      color: var(--primary-text-color);
+    }
+
+    .kind {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-xs, 11px);
+      font-weight: var(--ha-font-weight-medium, 500);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .modes {
+      display: flex;
+      overflow: hidden;
+      border-radius: var(--ha-control-border-radius, 10px);
+      background: color-mix(
+        in srgb,
+        var(--disabled-color, var(--primary-text-color)) 15%,
+        transparent
+      );
+    }
+
+    .mode {
+      display: flex;
+      flex: 1 1 0;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding: 8px 10px;
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+      font-weight: var(--ha-font-weight-medium, 500);
+    }
+
+    .mode + .mode {
+      box-shadow: inset 1px 0 0
+        color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    }
+
+    .mode.on {
+      color: var(--primary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+    }
+
+    .mode ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .rgb-row,
+    .stages {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 28px;
+    }
+
+    .bar,
+    .track {
+      position: relative;
+      flex: 1 1 auto;
+      height: 4px;
+      border-radius: 99px;
+      background: color-mix(in srgb, var(--primary-text-color) 16%, transparent);
+    }
+
+    .bar i,
+    .track i {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 71%;
+      border-radius: inherit;
+      background: var(--primary-color, #03a9f4);
+    }
+
+    .track i {
+      width: 66%;
+    }
+
+    .pct,
+    .stage-name {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+    }
+
+    .swatches {
+      display: flex;
+      gap: 5px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--swatch);
+      box-shadow: inset 0 0 0 1px
+        color-mix(in srgb, var(--primary-text-color) 18%, transparent);
+    }
+
+    .swatch.current {
+      box-shadow: 0 0 0 2px var(--card-background-color, #111),
+        0 0 0 3px var(--primary-color, #03a9f4);
+    }
+
+    .power {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: var(--primary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+    }
+
+    .power.on {
+      color: var(--primary-color, #03a9f4);
+    }
+
+    .power ha-icon {
+      --mdc-icon-size: 18px;
+    }
+
+    .track {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 4px;
+      padding: 0 2px;
+    }
+
+    .dot {
+      position: relative;
+      z-index: 1;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--primary-text-color) 28%, transparent);
+    }
+
+    .dot.done,
+    .dot.current {
+      background: var(--primary-color, #03a9f4);
+    }
+
+    .dot.current {
+      width: 10px;
+      height: 10px;
+    }
   `;
 }
 
@@ -178,7 +430,7 @@ registerLovelaceCard({
   name: STUDIO_CARD_TITLE,
   description:
     "Pick a scene-set. Lights use Room Lights: Mini; switches use Room Switches.",
-  preview: false,
+  preview: true,
   documentationURL: DOCUMENTATION_URL,
 });
 

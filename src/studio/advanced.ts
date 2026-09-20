@@ -1,6 +1,5 @@
 import { isLightEntity, uniqueEntityIds } from "../shared/entities";
 import type { HomeAssistant } from "../shared/types";
-import { rgbToHex } from "../cards/staged-lights/color";
 import { DEFAULT_RGB_HEX } from "../cards/staged-lights/const";
 import { brightnessToPercent } from "../cards/staged-lights/stages";
 import { DEFAULT_SCENE_LABEL, OFF_ICON } from "./const";
@@ -11,12 +10,14 @@ import {
   entityIdsFromScenes,
   isIntensityStageName,
   lightSceneTitle,
+  colorFromSceneEntity,
   lookToSceneState,
   studioIntensityNames,
   studioStagePercent,
 } from "./lights";
 import type {
   AdvancedGroup,
+  AdvancedGroupMode,
   AdvancedLightDraft,
   AdvancedLook,
   AdvancedLookState,
@@ -47,6 +48,7 @@ const toSceneLook = (
       state: look.state,
       brightness: look.brightness,
       hex: look.hex,
+      kelvin: look.kelvin,
       effect: look.effect,
     },
     hass,
@@ -94,6 +96,29 @@ export const advancedLevelOverflow = (value?: string): number => {
   return Math.max(0, count - MAX_ADVANCED_LEVELS);
 };
 
+export const isAdvancedRgbName = (name?: string): boolean =>
+  /^(rgb|smart)(?:$|[\s/_-])/i.test((name ?? "").trim());
+
+export const advancedGroupWritesRgbScene = (group: Pick<AdvancedGroup, "mode">): boolean =>
+  group.mode === "rgb";
+
+export const isAdvancedRgbGroup = (
+  group?: Pick<AdvancedGroup, "mode" | "name">,
+): boolean => {
+  if (!group) {
+    return false;
+  }
+  if (group.mode === "levels") {
+    return false;
+  }
+  return group.mode === "rgb" || isAdvancedRgbName(group.name);
+};
+
+export const nextAdvancedRgbName = (groups: AdvancedGroup[] = []): string => {
+  const count = groups.filter((group) => isAdvancedRgbGroup(group)).length;
+  return count === 0 ? "RGB" : `RGB ${count + 1}`;
+};
+
 export const advancedGroupLevelNames = (group: AdvancedGroup): string[] => {
   if (group.levelText != null) {
     return parseAdvancedLevelNames(group.levelText);
@@ -110,6 +135,9 @@ export const advancedGroupLevelNames = (group: AdvancedGroup): string[] => {
 export const advancedGroupStageCount = (group: AdvancedGroup): number => {
   if (!uniqueEntityIds(group.entities).length) {
     return 0;
+  }
+  if (advancedGroupWritesRgbScene(group)) {
+    return 1;
   }
   return advancedGroupLevelNames(group).length;
 };
@@ -145,6 +173,17 @@ export const newAdvancedGroup = (
   sceneLooks: {},
 });
 
+export const newAdvancedRgbGroup = (
+  name: string,
+  entities: string[] = [],
+): AdvancedGroup => ({
+  ...newAdvancedGroup(name, entities),
+  mode: "rgb",
+  stages: 1,
+  levelNames: undefined,
+  levelText: undefined,
+});
+
 export const defaultAdvancedLook = (
   group: AdvancedGroup,
   stage: number,
@@ -158,6 +197,7 @@ export const defaultAdvancedLook = (
       Math.round((studioStagePercent(stage, count) / 100) * peak),
     ),
     hex: group.hex || DEFAULT_RGB_HEX,
+    kelvin: group.kelvin,
     effect: group.effect ?? "",
   };
 };
@@ -215,15 +255,18 @@ export const advancedLightToScenes = (
   const meta: StudioLightMeta = {
     entities: ids,
     groups: (draft.groups ?? []).map((group) => {
-      const levelNames = advancedGroupLevelNames(group);
+      const rgb = advancedGroupWritesRgbScene(group);
+      const levelNames = rgb ? undefined : advancedGroupLevelNames(group);
       return {
         name: group.name.trim() || "Group",
         entities: uniqueEntityIds(group.entities),
-        stages: levelNames.length,
+        stages: rgb ? 1 : levelNames?.length,
         levelNames,
         hex: group.hex,
+        kelvin: group.kelvin,
         brightness: group.brightness,
         effect: group.effect,
+        mode: rgb ? "rgb" : "levels",
       };
     }),
   };
@@ -251,7 +294,8 @@ export const advancedLightToScenes = (
   ];
   (draft.groups ?? []).forEach((group) => {
     const members = uniqueEntityIds(group.entities);
-    const names = advancedGroupLevelNames(group);
+    const rgb = advancedGroupWritesRgbScene(group);
+    const names = rgb ? ["On"] : advancedGroupLevelNames(group);
     const count = members.length ? names.length : 0;
     if (!count) {
       return;
@@ -260,7 +304,9 @@ export const advancedLightToScenes = (
     for (let stage = 1; stage <= count; stage += 1) {
       scenes.push({
         id: advancedSceneId(slug, scenes.length),
-        name: `${name} · ${groupName} · ${names[stage - 1] ?? `Stage ${stage}`}`,
+        name: rgb
+          ? `${name} · ${groupName}`
+          : `${name} · ${groupName} · ${names[stage - 1] ?? `Stage ${stage}`}`,
         entities: groupToStageEntities(group, ids, stage, count, hass),
         meta,
       });
@@ -328,11 +374,26 @@ export const draftFromAdvancedScenes = (
     scene.name.split(" · ").slice(2).join(" · ").trim() ||
     scene.name.split(" · ").slice(-1)[0] ||
     "";
-  const clusterForGroup = (groupName: string, levelNames?: string[]): SceneConfig[] => {
+  const sceneLabel = (scene: SceneConfig): string =>
+    scene.name.split(" · ").slice(1).join(" · ").trim();
+  const clusterForGroup = (
+    groupName: string,
+    levelNames?: string[],
+    rgb = false,
+  ): SceneConfig[] => {
     const matched = ordered.slice(1).filter((scene) => {
-      const label = scene.name.split(" · ").slice(1).join(" · ").trim();
+      const label = sceneLabel(scene);
       const parts = label.split(" · ");
-      if ((parts[0] ?? "") !== groupName || parts.length < 2) {
+      if ((parts[0] ?? "") !== groupName) {
+        return false;
+      }
+      if (rgb) {
+        return true;
+      }
+      if (label === groupName) {
+        return true;
+      }
+      if (parts.length < 2) {
         return false;
       }
       const suffix = parts.slice(1).join(" · ");
@@ -361,6 +422,8 @@ export const draftFromAdvancedScenes = (
     effect?: string,
     stages?: number,
     levelNames?: string[],
+    mode?: AdvancedGroupMode,
+    kelvin?: number,
   ) => {
     const onIds = uniqueEntityIds(
       cluster.flatMap((scene) =>
@@ -371,6 +434,7 @@ export const draftFromAdvancedScenes = (
     const sample = onIds
       .map((entityId) => last?.entities[entityId])
       .find((look) => look?.state === "on");
+    const sampleColor = colorFromSceneEntity(sample);
     const sceneLooks: Record<string, Record<string, LightSceneLook>> = {};
     cluster.forEach((scene, index) => {
       const slotLooks: Record<string, LightSceneLook> = {};
@@ -381,55 +445,67 @@ export const draftFromAdvancedScenes = (
         }
         slotLooks[entityId] = {
           state: "on",
-          brightness: look.brightness
-            ? brightnessToPercent(look.brightness)
-            : undefined,
-          hex: look.rgb_color ? rgbToHex(look.rgb_color) : undefined,
-          effect: look.effect ?? "",
+          ...colorFromSceneEntity(look),
         };
       });
       if (Object.keys(slotLooks).length) {
         sceneLooks[String(index + 1)] = slotLooks;
       }
     });
+    const rgb = mode === "rgb";
     const names =
-      levelNames?.length
-        ? parseAdvancedLevelNames(levelNames)
-        : cluster.length
-          ? cluster.map((scene) => sceneSuffix(scene)).filter(Boolean)
-          : undefined;
+      rgb
+        ? undefined
+        : levelNames?.length
+          ? parseAdvancedLevelNames(levelNames)
+          : cluster.length
+            ? cluster.map((scene) => sceneSuffix(scene)).filter(Boolean)
+            : undefined;
+    const looks = rgb
+      ? last && sceneLooks[String(cluster.length)]
+        ? { "1": sceneLooks[String(cluster.length)] }
+        : sceneLooks["1"]
+          ? { "1": sceneLooks["1"] }
+          : sceneLooks
+      : sceneLooks;
     groups.push({
       id: `loaded-${groups.length}`,
       name: groupName,
       entities: uniqueEntityIds(members.length ? members : onIds),
-      hex: hex || (sample?.rgb_color ? rgbToHex(sample.rgb_color) : DEFAULT_RGB_HEX),
+      mode: rgb ? "rgb" : undefined,
+      hex: hex || sampleColor.hex || DEFAULT_RGB_HEX,
+      kelvin: kelvin ?? sampleColor.kelvin,
       brightness:
         brightness ??
         (sample?.brightness
           ? brightnessToPercent(sample.brightness)
           : DEFAULT_RGB_PERCENT),
       effect: effect ?? sample?.effect ?? "",
-      stages: names?.length ?? stages ?? cluster.length,
+      stages: rgb ? 1 : names?.length ?? stages ?? cluster.length,
       levelNames: names,
       levelText: names?.length ? serializeAdvancedLevelNames(names) : undefined,
-      sceneLooks,
+      sceneLooks: looks,
     });
   };
   if (meta?.groups?.length) {
     meta.groups.forEach((group) => {
       const groupName = group.name.trim() || "Group";
-      const names = group.levelNames?.length
-        ? parseAdvancedLevelNames(group.levelNames)
-        : undefined;
+      const rgb = group.mode === "rgb";
+      const names =
+        rgb || !group.levelNames?.length
+          ? undefined
+          : parseAdvancedLevelNames(group.levelNames);
       pushGroup(
         groupName,
-        clusterForGroup(groupName, names),
+        clusterForGroup(groupName, names, rgb),
         group.entities,
         group.hex,
         group.brightness,
         group.effect,
-        group.stages,
+        rgb ? 1 : group.stages,
         names,
+        group.mode,
+        group.kelvin,
       );
     });
     leftovers.splice(
@@ -453,11 +529,14 @@ export const draftFromAdvancedScenes = (
     const asGroup = onIds.length > 0 && brightnesses.size <= 1;
     if (asGroup) {
       const sample = scene.entities[onIds[0] ?? ""];
+      const color = colorFromSceneEntity(sample);
       groups.push({
         id: `loaded-extra-${index}`,
         name: label,
         entities: onIds,
-        hex: sample?.rgb_color ? rgbToHex(sample.rgb_color) : DEFAULT_RGB_HEX,
+        mode: isAdvancedRgbName(label) ? "rgb" : undefined,
+        hex: color.hex || DEFAULT_RGB_HEX,
+        kelvin: color.kelvin,
         brightness: sample?.brightness
           ? brightnessToPercent(sample.brightness)
           : DEFAULT_RGB_PERCENT,
@@ -471,18 +550,11 @@ export const draftFromAdvancedScenes = (
       entities: Object.fromEntries(
         entities.map((entityId) => {
           const look = scene.entities[entityId];
+          const color = colorFromSceneEntity(look);
           const next: AdvancedLookState = {
             state: look?.state === "on" ? "on" : "off",
+            ...color,
           };
-          if (look?.brightness) {
-            next.brightness = brightnessToPercent(look.brightness);
-          }
-          if (look?.rgb_color) {
-            next.hex = rgbToHex(look.rgb_color);
-          }
-          if (look?.effect) {
-            next.effect = look.effect;
-          }
           return [entityId, next];
         }),
       ),
@@ -508,6 +580,7 @@ export const cloneAdvancedDraft = (draft: AdvancedLightDraft): AdvancedLightDraf
   entities: [...draft.entities],
   groups: (draft.groups ?? []).map((group) => ({
     ...group,
+    mode: group.mode,
     entities: [...group.entities],
     sceneLooks: cloneAdvancedLooks(group.sceneLooks),
   })),
@@ -671,9 +744,7 @@ const savedLook = (scene: SceneConfig, entityId: string): LightSceneLook => {
   }
   return {
     state: "on",
-    brightness: look.brightness ? brightnessToPercent(look.brightness) : undefined,
-    hex: look.rgb_color ? rgbToHex(look.rgb_color) : undefined,
-    effect: look.effect ?? "",
+    ...colorFromSceneEntity(look),
   };
 };
 

@@ -1,4 +1,5 @@
 import { clamp } from "../../shared/hass";
+import { clampKelvin } from "./adjust";
 import {
   DEFAULT_RGB_BRIGHTNESS,
   DEFAULT_RGB_HEX,
@@ -6,7 +7,13 @@ import {
 } from "./const";
 import { normalizeHex } from "./color";
 import { stageToBrightness } from "./stages";
-import type { LightRowId, LightsCardState, RgbRowState, StageRowState } from "./types";
+import type {
+  LightRowId,
+  LightsCardState,
+  LightsGroupState,
+  RgbRowState,
+  StageRowState,
+} from "./types";
 
 const LAST_KEY: Record<LightRowId, "r" | "w" | "n"> = {
   rgb: "r",
@@ -108,6 +115,27 @@ export const exclusiveLightsState = (
   };
 };
 
+export const exclusiveGroupState = (
+  current?: LightsCardState,
+  groupId?: string,
+  stage?: number,
+  patch?: Pick<LightsGroupState, "hex" | "brightness" | "kelvin">,
+): LightsCardState => {
+  const base = exclusiveLightsState(current, undefined);
+  const prev = current?.group;
+  return {
+    ...base,
+    group: {
+      id: groupId ?? prev?.id ?? "",
+      on: Boolean(groupId),
+      stage: clamp(Math.round(Number(stage ?? prev?.stage) || 1), 1, 99),
+      hex: patch?.hex ?? prev?.hex,
+      brightness: patch?.brightness ?? prev?.brightness,
+      kelvin: patch?.kelvin ?? prev?.kelvin,
+    },
+  };
+};
+
 export const activeLightRow = (state?: LightsCardState): LightRowId | undefined => {
   if (state?.rgb?.on) {
     return "rgb";
@@ -152,6 +180,9 @@ export const parseLightsState = (raw?: string): LightsCardState => {
               : fallback.rgb.hex,
           fallback.rgb.hex,
         ),
+        ...((rgb.k ?? rgb.kelvin) != null
+          ? { kelvin: clampKelvin(rgb.k ?? rgb.kelvin) }
+          : {}),
       },
       warm: parseStage(parsed.w ?? parsed.warm, fallback.warm.stage, false),
       white: parseStage(parsed.n ?? parsed.white, fallback.white.stage, false),
@@ -172,6 +203,7 @@ export const serializeLightsState = (state?: LightsCardState): string => {
       o: exclusive.rgb.on ? 1 : 0,
       b: clamp(Math.round(Number(exclusive.rgb.brightness)) || DEFAULT_RGB_BRIGHTNESS, 1, 255),
       c: exclusive.rgb.hex || DEFAULT_RGB_HEX,
+      ...(exclusive.rgb.kelvin != null ? { k: clampKelvin(exclusive.rgb.kelvin) } : {}),
     },
     w: {
       o: exclusive.warm.on ? 1 : 0,

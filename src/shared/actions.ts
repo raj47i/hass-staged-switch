@@ -1,4 +1,4 @@
-import { isValidEntityId } from "./entities";
+import { isValidEntityId, lightAdjustKind } from "./entities";
 import { callHassService, isUnreachableError } from "./hass";
 import type { HomeAssistant, SwitchTarget } from "./types";
 
@@ -107,6 +107,8 @@ export const applyLightLooks = async (
     on: boolean;
     brightness: number;
     rgb?: [number, number, number];
+    hs?: [number, number];
+    kelvin?: number;
   },
   enabled = true,
 ): Promise<void> => {
@@ -114,26 +116,68 @@ export const applyLightLooks = async (
   if (!hass || !enabled || !ids.length) {
     return;
   }
-  const target = { entity_id: ids };
   if (!look.on || look.brightness <= 0) {
-    await callHassService(hass, "light", "turn_off", { entity_id: ids }, target);
+    await callHassService(hass, "light", "turn_off", { entity_id: ids }, { entity_id: ids });
     return;
   }
-  const data: Record<string, unknown> = {
-    entity_id: ids,
-    brightness: look.brightness,
-  };
-  if (look.rgb) {
-    data.rgb_color = look.rgb;
-  }
-  try {
-    await callHassService(hass, "light", "turn_on", data, target);
-  } catch {
-    delete data.rgb_color;
-    try {
-      await callHassService(hass, "light", "turn_on", data, target);
-    } catch {
-      await callHassService(hass, "homeassistant", "turn_on", { entity_id: ids }, target);
+  const turnOn = async (
+    group: string[],
+    extra: Record<string, unknown> = {},
+  ): Promise<void> => {
+    if (!group.length) {
+      return;
     }
-  }
+    const data: Record<string, unknown> = {
+      entity_id: group,
+      brightness: look.brightness,
+      ...extra,
+    };
+    const dest = { entity_id: group };
+    try {
+      await callHassService(hass, "light", "turn_on", data, dest);
+    } catch {
+      try {
+        await callHassService(
+          hass,
+          "light",
+          "turn_on",
+          { entity_id: group, brightness: look.brightness },
+          dest,
+        );
+      } catch {
+        await callHassService(hass, "homeassistant", "turn_on", { entity_id: group }, dest);
+      }
+    }
+  };
+  const rgb: string[] = [];
+  const hs: string[] = [];
+  const temp: string[] = [];
+  const dim: string[] = [];
+  ids.forEach((entityId) => {
+    const kind = lightAdjustKind(hass, entityId);
+    if (kind === "rgb" && look.rgb) {
+      rgb.push(entityId);
+      return;
+    }
+    if (kind === "hs" && (look.hs || look.rgb)) {
+      hs.push(entityId);
+      return;
+    }
+    if (kind === "temp" && look.kelvin) {
+      temp.push(entityId);
+      return;
+    }
+    dim.push(entityId);
+  });
+  await turnOn(dim);
+  await turnOn(rgb, look.rgb ? { rgb_color: look.rgb } : {});
+  await turnOn(
+    hs,
+    look.hs
+      ? { hs_color: look.hs }
+      : look.rgb
+        ? { rgb_color: look.rgb }
+        : {},
+  );
+  await turnOn(temp, { color_temp_kelvin: look.kelvin });
 };

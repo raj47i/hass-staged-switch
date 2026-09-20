@@ -6,7 +6,7 @@ import { visibleLights } from "../cards/staged-lights/roster";
 import { studioSetEntityIds } from "./entity-buttons";
 import { rgbToHex } from "../cards/staged-lights/color";
 import { lightsStorageKey, writeStoredLightsState } from "../cards/staged-lights/persist";
-import { exclusiveLightsState } from "../cards/staged-lights/state";
+import { exclusiveGroupState, exclusiveLightsState } from "../cards/staged-lights/state";
 import { percentToBrightness } from "../cards/staged-lights/stages";
 import {
   advancedSceneId,
@@ -67,9 +67,12 @@ import {
   draftFromAdvancedScenes,
   draftPatchFromAdvancedScene,
   isAdvancedOffScene,
+  isAdvancedRgbGroup,
   newAdvancedGroup,
   newAdvancedLightDraft,
   newAdvancedLook,
+  newAdvancedRgbGroup,
+  nextAdvancedRgbName,
   parseAdvancedLevelNames,
   reviewAdvancedSceneGroups,
   slotForAdvancedScene,
@@ -100,7 +103,9 @@ import {
   hydrateStudioCard,
   isRgbLiveTweak,
   isStudioOffSceneId,
+  lightsCardFromAdvanced,
   lightsCardFromStudio,
+  lightsStateFromStudio,
   lightsStudioKind,
   mergeLightsStudioConfig,
   mergeSwitchStudioConfig,
@@ -1699,6 +1704,86 @@ describe("advanced light scenes", () => {
     expect(summarizeGroups(scenes)[0]?.kind).toBe("advanced");
   });
 
+  it("writes multiple RGB / Smart groups as one color look each", () => {
+    expect(isAdvancedRgbGroup(newAdvancedRgbGroup("RGB"))).toBe(true);
+    expect(isAdvancedRgbGroup(newAdvancedGroup("Warm"))).toBe(false);
+    expect(isAdvancedRgbGroup(newAdvancedGroup("RGB"))).toBe(true);
+    expect(nextAdvancedRgbName([])).toBe("RGB");
+    expect(nextAdvancedRgbName([newAdvancedRgbGroup("RGB")])).toBe("RGB 2");
+    const scenes = advancedLightToScenes({
+      name: "Den",
+      slug: "den",
+      entities: ["light.living_rgb", "light.lamp"],
+      groups: [
+        newAdvancedRgbGroup("RGB", ["light.living_rgb"]),
+        newAdvancedRgbGroup("Smart", ["light.lamp"]),
+        {
+          ...newAdvancedGroup("Warm", ["light.lamp"]),
+          stages: 2,
+          levelNames: ["Min", "Max"],
+          levelText: "Min|Max",
+        },
+      ],
+      looks: [],
+    });
+    expect(scenes.map((scene) => scene.id)).toEqual([
+      "sla_den_00",
+      "sla_den_01",
+      "sla_den_02",
+      "sla_den_03",
+      "sla_den_04",
+    ]);
+    expect(scenes[1]?.name).toBe("Den · RGB");
+    expect(scenes[2]?.name).toBe("Den · Smart");
+    expect(scenes[3]?.name).toBe("Den · Warm · Min");
+    expect(scenes[1]?.meta?.groups?.map((group) => group.mode)).toEqual([
+      "rgb",
+      "rgb",
+      "levels",
+    ]);
+    const restored = draftFromAdvancedScenes("den", scenes);
+    expect(restored.groups.map((group) => [group.name, group.mode])).toEqual([
+      ["RGB", "rgb"],
+      ["Smart", "rgb"],
+      ["Warm", undefined],
+    ]);
+    const config = lightsCardFromAdvanced(
+      "custom:scene-studio-room-lights-mini-card",
+      "den",
+      scenes,
+    );
+    expect(config.groups?.map((group) => [group.name, group.kind])).toEqual([
+      ["RGB", "rgb"],
+      ["Smart", "rgb"],
+      ["Warm", "group"],
+    ]);
+    expect(config.groups?.[0]?.stages).toHaveLength(1);
+    expect(config.groups?.[2]?.stages).toHaveLength(2);
+    expect(
+      sceneIdForLightsState(
+        "den",
+        exclusiveGroupState(undefined, config.groups?.[0]?.id, 1, {
+          hex: "#7ea6ff",
+          brightness: 40,
+        }),
+        "light",
+        config,
+      ),
+    ).toBe("sla_den_01");
+    expect(
+      isRgbLiveTweak(
+        exclusiveGroupState(undefined, config.groups?.[0]?.id, 1, {
+          hex: "#ffffff",
+          brightness: 20,
+        }),
+        exclusiveGroupState(undefined, config.groups?.[0]?.id, 1, {
+          hex: "#7ea6ff",
+          brightness: 20,
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("can start from an empty extra look", () => {
     expect(
       advancedLightToScenes({
@@ -2009,6 +2094,67 @@ describe("studio edge cases", () => {
     expect(fan).toEqual({ state: "on" });
   });
 
+  it("writes hue, kelvin, or brightness for RGB-group members", () => {
+    const hueHass = {
+      ...hass,
+      states: {
+        ...hass.states,
+        "light.hue": {
+          entity_id: "light.hue",
+          state: "on",
+          attributes: { supported_color_modes: ["hs"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.temp": {
+          entity_id: "light.temp",
+          state: "on",
+          attributes: { supported_color_modes: ["color_temp"] },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+    };
+    const hue = lookToSceneState(
+      "light.hue",
+      { state: "on", brightness: 40, hex: "#ff0000" },
+      hueHass,
+    );
+    const temp = lookToSceneState(
+      "light.temp",
+      { state: "on", brightness: 40, kelvin: 2700 },
+      hueHass,
+    );
+    expect(hue.hs_color).toEqual([0, 100]);
+    expect(hue.rgb_color).toBeUndefined();
+    expect(temp.color_temp_kelvin).toBe(2700);
+    expect(temp.rgb_color).toBeUndefined();
+    const scenes = lightGroupToScenes(
+      {
+        ...newLightGroupDraft("Adjust"),
+        slug: "adjust",
+        entities: ["light.hue", "light.temp", "light.lamp"],
+        rgb: ["light.hue", "light.temp", "light.lamp"],
+        hex: "#00ff00",
+        kelvin: 4000,
+        brightness: 50,
+        sceneLooks: {
+          rgb: {
+            "light.hue": { state: "on" },
+            "light.temp": { state: "on" },
+            "light.lamp": { state: "on" },
+          },
+        },
+      },
+      hueHass,
+    );
+    const rgb = scenes.find((scene) => scene.id === "ssl_adjust_rgb");
+    expect(rgb?.entities["light.hue"]?.hs_color?.[0]).toBe(120);
+    expect(rgb?.entities["light.temp"]?.color_temp_kelvin).toBe(4000);
+    expect(rgb?.entities["light.lamp"]?.rgb_color).toBeUndefined();
+    expect(rgb?.entities["light.lamp"]?.brightness).toBe(percentToBrightness(50));
+  });
+
   it("loads a valid empty draft and ignores junk scene entities", () => {
     expect(draftFromLightScenes("living", []).slug).toBe("living");
     expect(draftFromAdvancedScenes("movie", []).entities).toEqual([]);
@@ -2131,6 +2277,169 @@ describe("studio card bind", () => {
       { rgb: { on: true, brightness: 10, hex: "#fff" }, warm: { on: false, stage: 1 }, white: { on: false, stage: 1 } },
       { rgb: { on: true, brightness: 40, hex: "#fff" }, warm: { on: false, stage: 1 }, white: { on: false, stage: 1 } },
     )).toBe(true);
+    expect(config.groups).toBeUndefined();
+  });
+
+  it("fills a Mini card from Advanced groups and custom looks", () => {
+    const three = {
+      stages: 3,
+      levelNames: ["Min", "Mid", "Max"],
+      levelText: "Min|Mid|Max",
+    };
+    const scenes = advancedLightToScenes({
+      name: "Living Room Lights",
+      slug: "living_room",
+      entities: ["light.living_rgb", "light.lamp"],
+      groups: [
+        { ...newAdvancedGroup("Fun", ["light.living_rgb"]), ...three },
+        { ...newAdvancedGroup("RGB", ["light.living_rgb"]), ...three },
+        { ...newAdvancedGroup("Warm", ["light.lamp"]), ...three },
+        { ...newAdvancedGroup("Cool", ["light.lamp"]), ...three },
+        { ...newAdvancedGroup("Party", ["light.living_rgb"]), ...three },
+        { ...newAdvancedGroup("White", ["light.lamp"]), ...three },
+      ],
+      looks: [
+        {
+          name: "Special",
+          entities: {
+            "light.living_rgb": { state: "on", brightness: 40, hex: "#7ea6ff" },
+            "light.lamp": { state: "off" },
+          },
+        },
+      ],
+    });
+    const config = lightsCardFromAdvanced(
+      "custom:scene-studio-room-lights-mini-card",
+      "living_room",
+      scenes,
+    );
+    expect(config.title).toBe("Living Room");
+    expect(config.groups?.map((group) => group.name)).toEqual([
+      "Fun",
+      "RGB",
+      "Warm",
+      "Cool",
+      "Party",
+      "White",
+      "Special",
+    ]);
+    expect(config.groups?.[6]?.stages).toHaveLength(1);
+    expect(config.groups?.[0]?.stages).toHaveLength(3);
+    expect(config.groups?.[0]?.stages?.[1]?.scene).toBe("sla_living_room_02");
+    expect(config.rgb).toBeUndefined();
+    const merged = mergeLightsStudioConfig(
+      { type: "custom:scene-studio-room-lights-mini-card", studio: "living_room" },
+      scenes,
+    );
+    expect(merged.groups).toHaveLength(7);
+    expect(
+      sceneIdForLightsState(
+        "living_room",
+        exclusiveGroupState(undefined, config.groups?.[0]?.id, 2),
+        "light",
+        config,
+      ),
+    ).toBe("sla_living_room_02");
+    expect(
+      sceneIdForLightsState(
+        "living_room",
+        exclusiveGroupState(exclusiveGroupState(undefined, config.groups?.[0]?.id, 2), undefined),
+        "light",
+        config,
+      ),
+    ).toBe("sla_living_room_00");
+    expect(
+      sceneIdForLightsState(
+        "living_room",
+        exclusiveGroupState(undefined, config.groups?.[6]?.id, 1),
+        "light",
+        config,
+      ),
+    ).toBe(config.groups?.[6]?.stages?.[0]?.scene);
+    expect(studioChildCardConfig("advanced", "living_room")).toEqual({
+      type: "custom:scene-studio-room-lights-mini-card",
+      studio: "living_room",
+    });
+    const hass = {
+      language: "en",
+      localize: (key: string) => key,
+      callService: async () => undefined,
+      states: {
+        "light.living_rgb": {
+          entity_id: "light.living_rgb",
+          state: "on",
+          attributes: { brightness: 80 },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.lamp": {
+          entity_id: "light.lamp",
+          state: "off",
+          attributes: {},
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+    } as HomeAssistant;
+    const inferred = lightsStateFromStudio(hass, config, scenes);
+    expect(inferred.group?.on).toBe(true);
+    expect(config.groups?.some((group) => group.id === inferred.group?.id)).toBe(true);
+    expect(
+      studioLooksMatch(
+        exclusiveGroupState(undefined, inferred.group?.id, inferred.group?.stage),
+        inferred,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps a mixed custom look, skips empty groups, and allows a single group", () => {
+    const scenes = advancedLightToScenes({
+      name: "Den",
+      slug: "den",
+      entities: ["light.living_rgb", "light.lamp"],
+      groups: [
+        { ...newAdvancedGroup("Empty", []), stages: 3, levelNames: ["Min", "Mid", "Max"] },
+        {
+          ...newAdvancedGroup("RGB", ["light.living_rgb"]),
+          stages: 2,
+          levelNames: ["Min", "Max"],
+          levelText: "Min|Max",
+        },
+      ],
+      looks: [
+        {
+          name: "Cinema",
+          entities: {
+            "light.living_rgb": { state: "on", brightness: 40, hex: "#7ea6ff" },
+            "light.lamp": { state: "on", brightness: 20 },
+          },
+        },
+      ],
+    });
+    const config = lightsCardFromAdvanced(
+      "custom:scene-studio-room-lights-mini-card",
+      "den",
+      scenes,
+    );
+    expect(config.groups?.map((group) => group.name)).toEqual(["RGB"]);
+    expect(config.looks?.map((look) => look.name)).toEqual(["Cinema"]);
+    expect(
+      sceneIdForLightsState(
+        "den",
+        exclusiveGroupState(undefined, "look-0", 1),
+        "light",
+        config,
+      ),
+    ).toBe("sla_den_03");
+    expect(mergeLightsStudioConfig(
+      { type: "custom:scene-studio-room-lights-mini-card", studio: "living" },
+      lightGroupToScenes({
+        ...newLightGroupDraft("Living"),
+        slug: "living",
+        entities: ["light.living_rgb"],
+        rgb: ["light.living_rgb"],
+      }),
+    ).groups).toBeUndefined();
   });
 
   it("fills a switch card from switch scenes", () => {
@@ -2293,6 +2602,7 @@ describe("studio card bind", () => {
     expect(pickCardTitle("", "Guest Room")).toBe("");
     expect(studioControlCardType("light")).toBe("custom:scene-studio-room-lights-mini-card");
     expect(studioControlCardType("minimal")).toBe("custom:scene-studio-room-lights-mini-card");
+    expect(studioControlCardType("advanced")).toBe("custom:scene-studio-room-lights-mini-card");
     expect(studioControlCardType("switch")).toBe("custom:scene-studio-room-switches-card");
     expect(showStudioEditor({ editor: true }, false)).toBe(true);
     expect(showStudioEditor({}, true)).toBe(true);

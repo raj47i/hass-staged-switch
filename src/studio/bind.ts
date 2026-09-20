@@ -7,11 +7,20 @@ import {
   ROOM_SWITCHES_CARD,
 } from "../shared";
 import { uniqueEntityIds } from "../shared/entities";
-import { rgbToHex } from "../cards/staged-lights/color";
 import type { StagedLightsCardConfig } from "../cards/staged-lights/types";
 import type { StageConfig, StagedSwitchCardConfig } from "../cards/staged-switch/types";
 import type { HomeAssistant } from "../shared/types";
-import { exclusiveLightsState, activeLightRow } from "../cards/staged-lights/state";
+import {
+  exclusiveGroupState,
+  exclusiveLightsState,
+  activeLightRow,
+} from "../cards/staged-lights/state";
+import {
+  findLightsGroup,
+  hasLightsGroups,
+  lightsGroupModes,
+  lightsGroupScene,
+} from "../cards/staged-lights/groups";
 import {
   hasStoredLightsState,
   resolveLightsState,
@@ -37,8 +46,15 @@ import {
   parseStudioSceneId,
   sceneId,
 } from "./ids";
-import { draftFromAdvancedScenes } from "./advanced";
+import { DEFAULT_RGB_HEX } from "../cards/staged-lights/const";
 import {
+  advancedGroupLevelNames,
+  advancedLookSlots,
+  draftFromAdvancedScenes,
+  isAdvancedRgbGroup,
+} from "./advanced";
+import {
+  colorFromSceneEntity,
   draftFromLightScenes,
   isLightDefaultSlot,
   isMinimalDraft,
@@ -450,9 +466,9 @@ export const pickCardTitle = (
 ): string => (override !== undefined ? override : derived);
 
 export const studioControlCardType = (kind: StudioSetKind): string =>
-  kind === "light" || kind === "minimal"
-    ? lovelaceType(ROOM_LIGHTS_MINI_CARD)
-    : lovelaceType(ROOM_SWITCHES_CARD);
+  kind === "switch"
+    ? lovelaceType(ROOM_SWITCHES_CARD)
+    : lovelaceType(ROOM_LIGHTS_MINI_CARD);
 
 export const studioDashboardSets = (
   sets: SwitchGroupSummary[],
@@ -539,6 +555,77 @@ export const lightsCardFromStudio = (
   };
 };
 
+export const lightsCardFromAdvanced = (
+  type: string,
+  slug: string,
+  scenes: SceneConfig[],
+): StagedLightsCardConfig => {
+  const mine = scenesForSlug(scenes, slug, "advanced");
+  const draft = draftFromAdvancedScenes(slug, mine);
+  const slots = advancedLookSlots(draft);
+  const groups = (draft.groups ?? [])
+    .map((group, groupIndex) => {
+      const rgb = isAdvancedRgbGroup(group);
+      const groupSlots = slots.filter(
+        (item) => item.kind === "group" && item.groupIndex === groupIndex,
+      );
+      const stages = rgb
+        ? (() => {
+            const last = groupSlots[groupSlots.length - 1];
+            return last?.id ? [{ name: "On", scene: last.id }] : [];
+          })()
+        : advancedGroupLevelNames(group)
+            .map((name, index) => {
+              const slot = groupSlots.find((item) => item.stage === index + 1);
+              return slot?.id ? { name, scene: slot.id } : undefined;
+            })
+            .filter((stage): stage is { name: string; scene: string } => Boolean(stage));
+      if (!stages.length) {
+        return undefined;
+      }
+      const scene = rgb ? stages[0]?.scene : undefined;
+      return {
+        id: group.id || `group-${groupIndex}`,
+        name: group.name.trim() || `Group ${groupIndex + 1}`,
+        icon: rgb ? "mdi:palette" : "mdi:lightbulb-group",
+        kind: rgb ? ("rgb" as const) : ("group" as const),
+        entities: uniqueEntityIds(group.entities),
+        hex: group.hex || DEFAULT_RGB_HEX,
+        kelvin: group.kelvin,
+        scene,
+        stages,
+      };
+    })
+    .filter((group): group is NonNullable<typeof group> => Boolean(group));
+  const looks = (draft.looks ?? [])
+    .map((look, lookIndex) => {
+      const slot = slots.find(
+        (item) => item.kind === "look" && item.lookIndex === lookIndex,
+      );
+      if (!slot?.id) {
+        return undefined;
+      }
+      const name = look.name.trim() || `Look ${lookIndex + 1}`;
+      return {
+        id: `look-${lookIndex}`,
+        name,
+        icon: "mdi:palette",
+        kind: "look" as const,
+        scene: slot.id,
+        stages: [{ name, scene: slot.id }],
+      };
+    })
+    .filter((look): look is NonNullable<typeof look> => Boolean(look));
+  return {
+    type,
+    studio: slug,
+    title: studioCardTitle(draft.name),
+    switches: draft.entities,
+    groups,
+    looks,
+  };
+};
+
 export const mergeLightsStudioConfig = (
   config: StagedLightsCardConfig,
   scenes: SceneConfig[] = peekStudioScenes(),
@@ -546,11 +633,14 @@ export const mergeLightsStudioConfig = (
   if (!config.studio) {
     return config;
   }
-  const mine = lightsScenesForSlug(scenes, config.studio);
+  const advanced = scenesForSlug(scenes, config.studio, "advanced");
+  const mine = advanced.length ? advanced : lightsScenesForSlug(scenes, config.studio);
   if (!mine.length) {
     return config;
   }
-  const derived = lightsCardFromStudio(config.type, config.studio, mine);
+  const derived = advanced.length
+    ? lightsCardFromAdvanced(config.type, config.studio, mine)
+    : lightsCardFromStudio(config.type, config.studio, mine);
   const hidden = pruneHiddenEntities(config.hidden_entities ?? [], derived.switches ?? []);
   return {
     ...derived,
@@ -667,13 +757,37 @@ export const studioChildCardConfig = (
     : {}),
 });
 
+const sceneIdForAdvancedLightsState = (
+  slug: string,
+  state?: LightsCardState,
+  config?: StagedLightsCardConfig,
+): string | undefined => {
+  if (!slug) {
+    return undefined;
+  }
+  if (!state?.group?.on) {
+    return advancedSceneId(slug, 0);
+  }
+  const mode =
+    findLightsGroup(config, state.group.id) ??
+    lightsGroupModes(config).find((item) => item.id === state.group?.id);
+  return (
+    lightsGroupScene(mode, state.group.stage) ??
+    advancedSceneId(slug, 0)
+  );
+};
+
 export const sceneIdForLightsState = (
   slug: string,
   state?: LightsCardState,
   kind: "light" | "minimal" = lightsStudioKind(slug),
+  config?: StagedLightsCardConfig,
 ): string | undefined => {
   if (!slug) {
     return undefined;
+  }
+  if (hasLightsGroups(config) || state?.group?.id) {
+    return sceneIdForAdvancedLightsState(slug, state, config);
   }
   const id = (slot: string) => lookSceneId(kind, slug, slot);
   if (!state?.rgb.on && !state?.warm.on && !state?.white.on) {
@@ -716,12 +830,25 @@ export const sceneIdForSwitchIndex = (
 export const isRgbLiveTweak = (
   previous: LightsCardState,
   next: LightsCardState,
-): boolean =>
-  Boolean(
+): boolean => {
+  if (
     previous.rgb?.on &&
-      next.rgb?.on &&
-      (previous.rgb.brightness !== next.rgb.brightness || previous.rgb.hex !== next.rgb.hex),
+    next.rgb?.on &&
+    (previous.rgb.brightness !== next.rgb.brightness ||
+      previous.rgb.hex !== next.rgb.hex ||
+      previous.rgb.kelvin !== next.rgb.kelvin)
+  ) {
+    return true;
+  }
+  return Boolean(
+    previous.group?.on &&
+      next.group?.on &&
+      previous.group.id === next.group.id &&
+      (previous.group.hex !== next.group.hex ||
+        previous.group.brightness !== next.group.brightness ||
+        previous.group.kelvin !== next.group.kelvin),
   );
+};
 
 const entityOn = (hass: HomeAssistant | undefined, entityId: string): boolean =>
   hass?.states[entityId]?.state === "on";
@@ -741,12 +868,102 @@ const cardRowFromStudioSlot = (slot?: string): LightsCardState["last"] => {
   return row === "whites" ? "white" : row;
 };
 
+const scoreSceneAgainstHass = (
+  hass: HomeAssistant,
+  scene: SceneConfig,
+  actuallyOn: Set<string>,
+): { score: number; error: number } => {
+  const wantOn = Object.entries(scene.entities)
+    .filter(([, look]) => look.state === "on")
+    .map(([entityId]) => entityId);
+  let score = 0;
+  let error = 0;
+  let samples = 0;
+  if (!wantOn.length) {
+    return { score: actuallyOn.size === 0 ? 1 : 0, error: 0 };
+  }
+  const hits = wantOn.filter((entityId) => actuallyOn.has(entityId)).length;
+  const extra = [...actuallyOn].filter((entityId) => !wantOn.includes(entityId)).length;
+  score = hits / (wantOn.length + extra);
+  wantOn.forEach((entityId) => {
+    const look = scene.entities[entityId];
+    if (!look || !actuallyOn.has(entityId)) {
+      return;
+    }
+    const brightness = Number(hass.states[entityId]?.attributes.brightness);
+    if (look.brightness && Number.isFinite(brightness)) {
+      error += Math.abs(brightness - look.brightness);
+      samples += 1;
+    }
+    if (rgbClose(look.rgb_color, hass.states[entityId]?.attributes.rgb_color)) {
+      score += 0.08 / wantOn.length;
+    }
+  });
+  return { score, error: samples ? error / samples : wantOn.length ? 64 : 0 };
+};
+
+const advancedStateFromStudio = (
+  hass: HomeAssistant | undefined,
+  config: StagedLightsCardConfig,
+  scenes: SceneConfig[],
+  fallback?: LightsCardState,
+): LightsCardState => {
+  const mine = scenesForSlug(scenes, config.studio ?? "", "advanced");
+  const base = exclusiveGroupState(fallback, undefined);
+  if (!hass || !mine.length) {
+    return fallback ?? base;
+  }
+  const roster = uniqueEntityIds(mine.flatMap((scene) => Object.keys(scene.entities)));
+  const actuallyOn = new Set(roster.filter((entityId) => entityOn(hass, entityId)));
+  let best: { score: number; error: number; id: string } | undefined;
+  mine.forEach((scene) => {
+    if (!parseAdvancedSceneId(scene.id)) {
+      return;
+    }
+    const { score, error } = scoreSceneAgainstHass(hass, scene, actuallyOn);
+    const betterScore = !best || score > best.score + 0.02;
+    const closerLook =
+      best && Math.abs(score - best.score) <= 0.02 && error < best.error - 8;
+    if (betterScore || closerLook) {
+      best = { score, error, id: scene.id };
+    }
+  });
+  if (!best || best.score < 0.45) {
+    return fallback ?? base;
+  }
+  const winner = best;
+  if (parseAdvancedSceneId(winner.id)?.index === 0) {
+    return base;
+  }
+  const modes = lightsGroupModes(config);
+  for (const mode of modes) {
+    const stages = mode.stages ?? [];
+    const stageIndex = stages.findIndex(
+      (stage) => stage.scene && sceneIdsMatch(stage.scene, winner.id),
+    );
+    if (stageIndex >= 0 || (mode.scene && sceneIdsMatch(mode.scene, winner.id))) {
+      const scene = mine.find((item) => sceneIdsMatch(item.id, winner.id));
+      const sample = Object.values(scene?.entities ?? {}).find((look) => look.state === "on");
+      const color = colorFromSceneEntity(sample);
+      return exclusiveGroupState(base, mode.id, stageIndex >= 0 ? stageIndex + 1 : 1, {
+        hex: color.hex || mode.hex,
+        brightness: sample?.brightness,
+        kelvin: color.kelvin,
+      });
+    }
+  }
+  return base;
+};
+
 export const lightsStateFromStudio = (
   hass: HomeAssistant | undefined,
   config: StagedLightsCardConfig,
   scenes: SceneConfig[],
   fallback?: LightsCardState,
 ): LightsCardState => {
+  if (hasLightsGroups(config)) {
+    return advancedStateFromStudio(hass, config, scenes, fallback);
+  }
   const mine = lightsScenesForSlug(scenes, config.studio ?? "");
   const base = exclusiveLightsState(fallback, undefined);
   if (!hass || !mine.length) {
@@ -760,39 +977,12 @@ export const lightsStateFromStudio = (
     if (!slot) {
       return;
     }
-    const wantOn = Object.entries(scene.entities)
-      .filter(([, look]) => look.state === "on")
-      .map(([entityId]) => entityId);
-    let score = 0;
-    let error = 0;
-    let samples = 0;
-    if (!wantOn.length) {
-      score = actuallyOn.size === 0 ? 1 : 0;
-    } else {
-      const hits = wantOn.filter((entityId) => actuallyOn.has(entityId)).length;
-      const extra = [...actuallyOn].filter((entityId) => !wantOn.includes(entityId)).length;
-      score = hits / (wantOn.length + extra);
-      wantOn.forEach((entityId) => {
-        const look = scene.entities[entityId];
-        if (!look || !actuallyOn.has(entityId)) {
-          return;
-        }
-        const brightness = Number(hass.states[entityId]?.attributes.brightness);
-        if (look.brightness && Number.isFinite(brightness)) {
-          error += Math.abs(brightness - look.brightness);
-          samples += 1;
-        }
-        if (rgbClose(look.rgb_color, hass.states[entityId]?.attributes.rgb_color)) {
-          score += 0.08 / wantOn.length;
-        }
-      });
-    }
-    const meanError = samples ? error / samples : wantOn.length ? 64 : 0;
+    const { score, error } = scoreSceneAgainstHass(hass, scene, actuallyOn);
     const betterScore = !best || score > best.score + 0.02;
     const closerLook =
-      best && Math.abs(score - best.score) <= 0.02 && meanError < best.error - 8;
+      best && Math.abs(score - best.score) <= 0.02 && error < best.error - 8;
     if (betterScore || closerLook) {
-      best = { score, error: meanError, slot };
+      best = { score, error, slot };
     }
   });
   if (!best || best.score < 0.45) {
@@ -807,9 +997,11 @@ export const lightsStateFromStudio = (
   if (best.slot === "rgb") {
     const rgbScene = mine.find((scene) => parseLookSceneId(scene.id)?.slot === "rgb");
     const sample = Object.values(rgbScene?.entities ?? {}).find((look) => look.state === "on");
+    const color = colorFromSceneEntity(sample);
     return exclusiveLightsState(base, "rgb", {
       brightness: sample?.brightness,
-      hex: sample?.rgb_color ? rgbToHex(sample.rgb_color) : undefined,
+      hex: color.hex,
+      kelvin: color.kelvin,
     });
   }
   const tone = /^(w|n|t)(\d+)$/.exec(best.slot);
@@ -840,6 +1032,17 @@ export const studioLooksMatch = (
   left?: LightsCardState,
   right?: LightsCardState,
 ): boolean => {
+  const leftGroup = left?.group?.on ? left.group.id : undefined;
+  const rightGroup = right?.group?.on ? right.group.id : undefined;
+  if (leftGroup || rightGroup || left?.group || right?.group) {
+    if (leftGroup !== rightGroup) {
+      return false;
+    }
+    if (!leftGroup) {
+      return true;
+    }
+    return left?.group?.stage === right?.group?.stage;
+  }
   const row = activeLightRow(left);
   if (row !== activeLightRow(right)) {
     return false;

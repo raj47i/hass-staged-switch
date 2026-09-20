@@ -2,6 +2,12 @@ import { css } from "lit";
 import { cardStyles as lightsCardStyles } from "../staged-lights/styles";
 
 const miniStyles = css`
+  .mode-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .mode-bar {
     display: flex;
     align-items: stretch;

@@ -18,6 +18,8 @@ export const studioStyles = css`
     );
     --studio-text: var(--primary-text-color, #212121);
     --studio-muted: var(--secondary-text-color, #727272);
+    --mdc-text-field-fill-color: var(--studio-chip);
+    --input-fill-color: var(--studio-chip);
     display: block;
     min-height: 100%;
     color: var(--studio-text);
@@ -400,8 +402,10 @@ export const studioStyles = css`
 
   .secondary,
   .ghost {
+    appearance: none;
+    -webkit-appearance: none;
     border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-    background: var(--studio-inset);
+    background: var(--studio-chip);
     color: var(--studio-text);
   }
 
@@ -448,6 +452,12 @@ export const studioStyles = css`
   .lane.over {
     border-color: var(--primary-color, #03a9f4);
     background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, var(--studio-surface));
+  }
+
+  .assign-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .lanes {
@@ -551,6 +561,43 @@ export const studioStyles = css`
     width: 160px;
   }
 
+  .hue,
+  .kelvin {
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    outline: none;
+  }
+
+  .hue {
+    background: linear-gradient(
+      to right,
+      #ff0000,
+      #ffff00,
+      #00ff00,
+      #00ffff,
+      #0000ff,
+      #ff00ff,
+      #ff0000
+    );
+  }
+
+  .kelvin {
+    background: linear-gradient(to right, #ff8a1d, #f3eadc, #c4e1ff);
+  }
+
+  .hue::-webkit-slider-thumb,
+  .kelvin::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--studio-text, #fff);
+    cursor: pointer;
+  }
+
   .step {
     display: flex;
     flex-direction: column;
@@ -615,8 +662,14 @@ export const studioStyles = css`
     padding: 10px 12px;
     border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.14));
     border-radius: 8px;
-    background: var(--studio-inset);
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--studio-chip);
+    background-color: var(--studio-chip);
+    background-image: none;
+    box-shadow: none;
     color: var(--studio-text);
+    caret-color: var(--studio-text);
     font: inherit;
     color-scheme: inherit;
   }

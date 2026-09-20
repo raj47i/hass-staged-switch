@@ -17,8 +17,12 @@ export interface SceneEntityState {
   state: SwitchState;
   brightness?: number;
   rgb_color?: [number, number, number];
+  hs_color?: [number, number];
+  color_temp_kelvin?: number;
   effect?: string;
 }
+
+export type AdvancedGroupMode = "levels" | "rgb";
 
 export interface StudioAdvancedGroupMeta {
   name: string;
@@ -26,8 +30,11 @@ export interface StudioAdvancedGroupMeta {
   stages?: number;
   levelNames?: string[];
   hex?: string;
+  kelvin?: number;
   brightness?: number;
   effect?: string;
+  /** `rgb` = one color/brightness look. Missing = levels, unless the name is RGB/Smart. */
+  mode?: AdvancedGroupMode;
 }
 
 export interface StudioLightMeta {
@@ -40,6 +47,7 @@ export interface StudioLightMeta {
   whiteStages?: number;
   whitesStages?: number;
   hex?: string;
+  kelvin?: number;
   brightness?: number;
   effect?: string;
   groups?: StudioAdvancedGroupMeta[];
@@ -79,6 +87,7 @@ export interface LightSceneLook {
   state: SwitchState;
   brightness?: number;
   hex?: string;
+  kelvin?: number;
   effect?: string;
 }
 
@@ -92,6 +101,7 @@ export interface LightGroupDraft {
   white: string[];
   whites?: string[];
   hex: string;
+  kelvin?: number;
   presets: string[];
   /** RGB brightness as 1–100%. Off is a separate scene, never 0%. */
   brightness: number;
@@ -108,6 +118,7 @@ export interface AdvancedLookState {
   state: SwitchState;
   brightness?: number;
   hex?: string;
+  kelvin?: number;
   effect?: string;
 }
 
@@ -120,7 +131,9 @@ export interface AdvancedGroup {
   id: string;
   name: string;
   entities: string[];
+  mode?: AdvancedGroupMode;
   hex?: string;
+  kelvin?: number;
   brightness?: number;
   effect?: string;
   stages?: number;

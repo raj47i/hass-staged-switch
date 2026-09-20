@@ -24,9 +24,12 @@ import {
   friendlyNameFromEntity,
   generatedEntityLabel,
   isGeneratedEntityLabel,
+  isAdjustableLight,
   isRosterEntity,
   isRgbCapableLight,
   isToggleEntity,
+  lightAdjustKind,
+  rosterAdjustKind,
   safeIcon,
   uniqueEntityIds,
 } from "./entities";
@@ -52,6 +55,7 @@ import {
   writeStoredNumber,
   writeStoredOnOff,
 } from "./persist";
+import { packGroupRows, packGroupRowSizes } from "./layout";
 import { SerialActionQueue } from "./queue";
 import { registerLovelaceCard } from "./register";
 import {
@@ -589,12 +593,137 @@ describe("isToggleEntity extras", () => {
           last_changed: "",
           last_updated: "",
         },
+        "light.hue": {
+          entity_id: "light.hue",
+          state: "on",
+          attributes: { supported_color_modes: ["hs"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.dimmer": {
+          entity_id: "light.dimmer",
+          state: "on",
+          attributes: { supported_color_modes: ["brightness"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.relay": {
+          entity_id: "light.relay",
+          state: "off",
+          attributes: { supported_color_modes: ["onoff"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.plain": {
+          entity_id: "light.plain",
+          state: "off",
+          attributes: {},
+          last_changed: "",
+          last_updated: "",
+        },
       },
     });
     expect(isRgbCapableLight(hass, "light.rgb")).toBe(true);
     expect(isRgbCapableLight(hass, "light.unloaded")).toBe(true);
     expect(isRgbCapableLight(hass, "light.warm")).toBe(false);
+    expect(isRgbCapableLight(hass, "light.hue")).toBe(false);
     expect(isRgbCapableLight(hass, "switch.lamp")).toBe(false);
+    expect(isAdjustableLight(hass, "light.dimmer")).toBe(true);
+    expect(isAdjustableLight(hass, "light.warm")).toBe(true);
+    expect(rosterAdjustKind(hass, ["light.dimmer"])).toBe("brightness");
+    expect(rosterAdjustKind(hass, ["light.hue"])).toBe("hs");
+    expect(rosterAdjustKind(hass, ["light.warm"])).toBe("temp");
+    expect(rosterAdjustKind(hass, ["light.dimmer", "light.hue", "light.rgb"])).toBe(
+      "rgb",
+    );
+    expect(rosterAdjustKind(hass, ["light.dimmer", "light.hue"])).toBe("hs");
+    expect(lightAdjustKind(hass, "light.relay")).toBe("onoff");
+    expect(lightAdjustKind(hass, "light.plain")).toBe("onoff");
+    expect(rosterAdjustKind(hass, ["light.relay"])).toBe("onoff");
+  });
+
+  it("turns dimmers, hue, and temp lights on without RGB color", async () => {
+    const calls: Array<{ domain: string; service: string; data?: unknown }> = [];
+    const hass = hassStub({
+      states: {
+        "light.rgb": {
+          entity_id: "light.rgb",
+          state: "on",
+          attributes: { supported_color_modes: ["rgb"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.hue": {
+          entity_id: "light.hue",
+          state: "on",
+          attributes: { supported_color_modes: ["hs"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.warm": {
+          entity_id: "light.warm",
+          state: "on",
+          attributes: { supported_color_modes: ["color_temp"] },
+          last_changed: "",
+          last_updated: "",
+        },
+        "light.dimmer": {
+          entity_id: "light.dimmer",
+          state: "on",
+          attributes: { supported_color_modes: ["brightness"] },
+          last_changed: "",
+          last_updated: "",
+        },
+      },
+      callService: async (domain, service, serviceData) => {
+        calls.push({ domain, service, data: serviceData });
+      },
+    });
+    await applyLightLooks(
+      hass,
+      ["light.rgb", "light.hue", "light.warm", "light.dimmer"],
+      {
+        on: true,
+        brightness: 180,
+        rgb: [255, 152, 0],
+        hs: [30, 100],
+        kelvin: 2700,
+      },
+    );
+    expect(calls).toEqual([
+      {
+        domain: "light",
+        service: "turn_on",
+        data: { entity_id: ["light.dimmer"], brightness: 180 },
+      },
+      {
+        domain: "light",
+        service: "turn_on",
+        data: {
+          entity_id: ["light.rgb"],
+          brightness: 180,
+          rgb_color: [255, 152, 0],
+        },
+      },
+      {
+        domain: "light",
+        service: "turn_on",
+        data: {
+          entity_id: ["light.hue"],
+          brightness: 180,
+          hs_color: [30, 100],
+        },
+      },
+      {
+        domain: "light",
+        service: "turn_on",
+        data: {
+          entity_id: ["light.warm"],
+          brightness: 180,
+          color_temp_kelvin: 2700,
+        },
+      },
+    ]);
   });
 });
 
@@ -641,6 +770,38 @@ describe("asArray and safeIcon", () => {
       "light.a",
       "switch.b",
     ]);
+  });
+});
+
+describe("packGroupRows", () => {
+  it("keeps 1–3 on one row and never leaves a leftover single after that", () => {
+    expect(packGroupRowSizes(0)).toEqual([]);
+    expect(packGroupRowSizes(1)).toEqual([1]);
+    expect(packGroupRowSizes(2)).toEqual([2]);
+    expect(packGroupRowSizes(3)).toEqual([3]);
+    expect(packGroupRowSizes(4)).toEqual([2, 2]);
+    expect(packGroupRowSizes(5)).toEqual([3, 2]);
+    expect(packGroupRowSizes(6)).toEqual([3, 3]);
+    expect(packGroupRowSizes(7)).toEqual([3, 2, 2]);
+    expect(packGroupRowSizes(8)).toEqual([3, 3, 2]);
+    expect(packGroupRowSizes(9)).toEqual([3, 3, 3]);
+    expect(packGroupRowSizes(10)).toEqual([3, 3, 2, 2]);
+    expect(packGroupRowSizes(13)).toEqual([3, 3, 3, 2, 2]);
+    expect(
+      packGroupRows(["Fun", "RGB", "Warm", "Cool", "Party", "White"]).map((row) =>
+        row.join(","),
+      ),
+    ).toEqual(["Fun,RGB,Warm", "Cool,Party,White"]);
+    expect(
+      packGroupRows(["Fun", "RGB", "Warm", "Cool", "Party", "White", "Special"]).map(
+        (row) => row.join(","),
+      ),
+    ).toEqual(["Fun,RGB,Warm", "Cool,Party", "White,Special"]);
+    for (let count = 2; count <= 20; count += 1) {
+      const sizes = packGroupRowSizes(count);
+      expect(sizes.every((size) => size === 2 || size === 3)).toBe(true);
+      expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(count);
+    }
   });
 });
 

@@ -7,11 +7,18 @@ import {
   friendlyActionError,
   isLightEntity,
   isRgbCapableLight,
+  lightAdjustKind,
   isValidEntityId,
   withTimeout,
 } from "../shared";
 import type { HomeAssistant } from "../shared/types";
-import { normalizeHex } from "../cards/staged-lights/color";
+import { hexToHue, hueToHex, normalizeHex } from "../cards/staged-lights/color";
+import {
+  clampKelvin,
+  DEFAULT_KELVIN,
+  kelvinRangeForIds,
+  kelvinToHex,
+} from "../cards/staged-lights/adjust";
 import "./assign";
 import "./bulk";
 import {
@@ -33,9 +40,12 @@ import {
   draftPatchFromAdvancedScene,
   emptyLookState,
   lookFromAdvancedSlot,
+  isAdvancedRgbGroup,
   newAdvancedGroup,
   newAdvancedLightDraft,
   newAdvancedLook,
+  newAdvancedRgbGroup,
+  nextAdvancedRgbName,
   parseAdvancedLevelNames,
   reviewAdvancedSceneGroups,
   serializeAdvancedLevelNames,
@@ -169,9 +179,9 @@ export class SceneStudioAdvancedWizard extends LitElement {
       ...group,
       entities: [...group.entities],
     }));
-    const rgb = groups.find((group) => group.name.trim().toLowerCase() === "rgb");
+    const rgb = groups.find((group) => isAdvancedRgbGroup(group));
     if (!rgb) {
-      groups.unshift(newAdvancedGroup("RGB", rgbIds));
+      groups.unshift(newAdvancedRgbGroup("RGB", rgbIds));
       return groups;
     }
     rgbIds.forEach((entityId) => {
@@ -238,11 +248,14 @@ export class SceneStudioAdvancedWizard extends LitElement {
     this._patch({ entities: next });
   }
 
-  private _addGroup(): void {
+  private _addGroup(ev?: Event): void {
+    const mode = (ev as CustomEvent<{ mode?: string }>)?.detail?.mode;
     this._patch({
       groups: [
         ...this._draft.groups,
-        newAdvancedGroup(`Group ${this._draft.groups.length + 1}`),
+        mode === "rgb"
+          ? newAdvancedRgbGroup(nextAdvancedRgbName(this._draft.groups))
+          : newAdvancedGroup(`Group ${this._draft.groups.length + 1}`),
       ],
     });
   }
@@ -821,8 +834,9 @@ export class SceneStudioAdvancedWizard extends LitElement {
         <scene-studio-assign
           .hass=${this.hass}
           .entities=${this._draft.entities}
-          .help=${"Drag an entity into a group, or tap one and then tap a group. Groups can overlap. Type level names split by |. Short names fit the card buttons. Only lights in a group change on that group's looks. The rest stay off. Add a custom look later if you need a mix that is not a group level."}
+          .help=${"Drag an entity into a group, or tap one and then tap a group. Groups can overlap. RGB / Smart groups take any lights — RGB, hue, temperature, or dimmers — and the card only shows the sliders those lights support. Level groups use names split by |. Only lights in a group change on that group's looks. The rest stay off. Add a custom look later if you need a mix that is not a group level."}
           .groups=${this._draft.groups.map((group) => {
+            const rgb = isAdvancedRgbGroup(group);
             const text =
               group.levelText ??
               serializeAdvancedLevelNames(advancedGroupLevelNames(group));
@@ -832,9 +846,14 @@ export class SceneStudioAdvancedWizard extends LitElement {
               name: group.name,
               entities: group.entities,
               editable: true,
-              showStages: true,
-              levelInput: true,
+              rgbOnly: rgb,
+              showStages: !rgb,
+              levelInput: !rgb,
               minEntities: 1,
+              kindLabel: rgb ? "RGB / Smart" : undefined,
+              hint: rgb
+                ? "Controls match the lights: color for RGB, hue + brightness, temperature, or brightness only."
+                : undefined,
               levels: text || DEFAULT_ADVANCED_LEVEL_TEXT,
               levelWarning: overflow
                 ? "Only the first 7 names are used."
@@ -874,8 +893,11 @@ export class SceneStudioAdvancedWizard extends LitElement {
     const look = lookFromAdvancedSlot(this._draft, slot, entityId);
     const on = look.state === "on";
     const light = on && isLightEntity(entityId);
-    const rgb = light && isRgbCapableLight(this.hass, entityId);
+    const kind = lightAdjustKind(this.hass, entityId);
     const percent = asRgbPercent(look.brightness ?? DEFAULT_RGB_PERCENT);
+    const hue = hexToHue(look.hex ?? "#ff8a1d");
+    const kelvinRange = kelvinRangeForIds(this.hass, [entityId]);
+    const kelvin = clampKelvin(look.kelvin ?? DEFAULT_KELVIN, kelvinRange.min, kelvinRange.max);
     return html`
       <div class="live-entity">
         <div class="live-entity-head">
@@ -888,7 +910,7 @@ export class SceneStudioAdvancedWizard extends LitElement {
             ${on ? "On" : "Off"}
           </button>
         </div>
-        ${light
+        ${light && kind !== "onoff"
           ? html`
               <label class="field">
                 <span>${percent}%</span>
@@ -906,7 +928,51 @@ export class SceneStudioAdvancedWizard extends LitElement {
               </label>
             `
           : nothing}
-        ${rgb
+        ${kind === "hs" && light
+          ? html`
+              <label class="field">
+                <span>Hue · ${hue}°</span>
+                <input
+                  class="hue"
+                  type="range"
+                  min="0"
+                  max="360"
+                  .value=${String(hue)}
+                  @input=${(ev: Event) =>
+                    this._setLiveLook(entityId, {
+                      hex: hueToHex(Number((ev.target as HTMLInputElement).value)),
+                    })}
+                />
+              </label>
+            `
+          : nothing}
+        ${kind === "temp" && light
+          ? html`
+              <label class="field">
+                <span>Temperature · ${kelvin}K</span>
+                <input
+                  class="kelvin"
+                  type="range"
+                  min=${kelvinRange.min}
+                  max=${kelvinRange.max}
+                  step="50"
+                  .value=${String(kelvin)}
+                  @input=${(ev: Event) => {
+                    const next = clampKelvin(
+                      (ev.target as HTMLInputElement).value,
+                      kelvinRange.min,
+                      kelvinRange.max,
+                    );
+                    this._setLiveLook(entityId, {
+                      kelvin: next,
+                      hex: kelvinToHex(next),
+                    });
+                  }}
+                />
+              </label>
+            `
+          : nothing}
+        ${kind === "rgb" && light
           ? html`
               <div class="presets">
                 ${STUDIO_RGB_PRESETS.map(

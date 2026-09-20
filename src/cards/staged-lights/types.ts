@@ -40,12 +40,34 @@ export interface StagedLightsCardConfig extends LovelaceCardConfig {
   hidden_entities?: string[];
   /** Full scene-set roster for chips, including entities not in a group. */
   switches?: Array<string | SwitchEntityConfig>;
+  /** Named Advanced groups. Simple / Minimal never set this. */
+  groups?: LightsGroupMode[];
+  /** Extra Advanced looks, packed with `groups` on the Mini card. */
+  looks?: LightsGroupMode[];
+}
+
+export interface LightsGroupStage {
+  name?: string;
+  scene?: string;
+}
+
+export interface LightsGroupMode {
+  id: string;
+  name: string;
+  icon?: string;
+  kind?: "group" | "look" | "rgb";
+  scene?: string;
+  stages?: LightsGroupStage[];
+  entities?: string[];
+  hex?: string;
+  kelvin?: number;
 }
 
 export interface RgbRowState {
   on: boolean;
   brightness: number;
   hex: string;
+  kelvin?: number;
 }
 
 export interface StageRowState {
@@ -53,11 +75,22 @@ export interface StageRowState {
   stage: number;
 }
 
+export interface LightsGroupState {
+  id: string;
+  on: boolean;
+  stage: number;
+  hex?: string;
+  brightness?: number;
+  kelvin?: number;
+}
+
 export interface LightsCardState {
   rgb: RgbRowState;
   warm: StageRowState;
   white: StageRowState;
   last?: LightRowId;
+  /** Advanced Mini only. Simple / Minimal ignore this. */
+  group?: LightsGroupState;
 }
 
 export type LightRowId = "rgb" | "warm" | "white";

@@ -7,6 +7,7 @@ import {
 } from "../../shared/entities";
 import type { SwitchEntityConfig, SwitchTarget } from "../../shared/types";
 import { MIN_WARM_WHITE_ENTITIES, ROW_ORDER } from "./const";
+import { hasLightsGroups } from "./groups";
 import type { LightRowId, StagedLightsCardConfig } from "./types";
 
 export const rowRoster = (
@@ -91,6 +92,9 @@ export const isEmptyLightsConfig = (config?: StagedLightsCardConfig): boolean =>
     return true;
   }
   if (config.studio) {
+    return false;
+  }
+  if (hasLightsGroups(config)) {
     return false;
   }
   return !ROW_ORDER.some((row) => rowIsConfigured(config, row));

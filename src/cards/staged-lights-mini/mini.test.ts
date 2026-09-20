@@ -6,14 +6,19 @@ import { CARD_NAME } from "./const";
 import {
   MINI_LAYOUT_ROWS,
   configuredMiniRow,
+  miniControlGroup,
+  miniGroupRows,
+  miniGroupToggleTarget,
   miniLayoutRows,
   miniActiveRow,
   miniControlRow,
   miniModeMeta,
   miniModeOn,
   miniModes,
+  miniShowsGroupControls,
   miniToggleTarget,
 } from "./layout";
+import { exclusiveGroupState } from "../staged-lights/state";
 
 describe("mini lights layout", () => {
   it("always uses two rows and only the configured RGB, Warm, and White modes", () => {
@@ -244,6 +249,69 @@ describe("mini lights layout", () => {
     );
     expect(miniControlRow(whiteOff, config)).toBe("white");
     expect(miniToggleTarget("white", whiteOff, config)).toBe("white");
+  });
+
+  it("packs Advanced groups 2–3 per row and leaves Simple RGB/Warm/White alone", () => {
+    const names = ["Fun", "RGB", "Warm", "Cool", "Party", "White", "Special"];
+    const config = {
+      type: `custom:${CARD_NAME}`,
+      studio: "living",
+      groups: names.map((name, index) => ({
+        id: `g${index}`,
+        name,
+        stages: [
+          { name: "Min", scene: `sla_living_0${index + 1}` },
+          { name: "Mid", scene: `sla_living_1${index}` },
+          { name: "Max", scene: `sla_living_2${index}` },
+        ],
+      })),
+    };
+    expect(miniGroupRows(config).map((row) => row.map((mode) => mode.name))).toEqual([
+      ["Fun", "RGB", "Warm"],
+      ["Cool", "Party"],
+      ["White", "Special"],
+    ]);
+    expect(miniLayoutRows(config)).toBe(4);
+    expect(
+      miniLayoutRows({
+        type: `custom:${CARD_NAME}`,
+        studio: "den",
+        groups: [
+          {
+            id: "rgb",
+            name: "RGB",
+            kind: "rgb",
+            hex: "#ff8a1d",
+            entities: ["light.living_rgb"],
+            stages: [{ name: "On", scene: "sla_den_01" }],
+          },
+          {
+            id: "smart",
+            name: "Smart",
+            kind: "rgb",
+            hex: "#7ea6ff",
+            entities: ["light.lamp"],
+            stages: [{ name: "On", scene: "sla_den_02" }],
+          },
+        ],
+      }),
+    ).toBe(2);
+    expect(miniShowsGroupControls(undefined, config)).toBe(true);
+    expect(miniControlGroup(undefined, config)?.name).toBe("Fun");
+    const funOn = exclusiveGroupState(undefined, "g0", 2);
+    expect(miniGroupToggleTarget(config.groups[0]!, funOn)).toBeUndefined();
+    expect(miniGroupToggleTarget(config.groups[1]!, funOn)).toBe("g1");
+    expect(miniModes(config)).toEqual([]);
+    expect(miniModes({ type: `custom:${CARD_NAME}`, rgb: ["light.sofa"] })).toEqual(["rgb"]);
+    expect(
+      miniLayoutRows({
+        type: `custom:${CARD_NAME}`,
+        looks: [
+          { id: "look-0", name: "Party", scene: "sla_living_01", stages: [{ name: "Party", scene: "sla_living_01" }] },
+          { id: "look-1", name: "Film", scene: "sla_living_02", stages: [{ name: "Film", scene: "sla_living_02" }] },
+        ],
+      }),
+    ).toBe(1);
   });
 
   it("stores mini state under a separate browser key", () => {

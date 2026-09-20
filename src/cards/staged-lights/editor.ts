@@ -6,7 +6,7 @@ import {
   entitiesFromDevice,
   entityDisplayName,
   fireConfigChanged,
-  isRgbCapableLight,
+  isLightEntity,
   isRosterEntity,
   isToggleEntity,
   isValidEntityId,
@@ -140,7 +140,7 @@ export class StagedLightsCardEditor extends LitElement {
       return false;
     }
     if (row === "rgb") {
-      return isRgbCapableLight(this.hass, entityId);
+      return isLightEntity(entityId);
     }
     return true;
   }
