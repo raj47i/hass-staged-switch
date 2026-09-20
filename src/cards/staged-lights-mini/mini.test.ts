@@ -114,48 +114,48 @@ describe("mini lights layout", () => {
     expect(serializeLightsState(warmOff)).toContain('"l":"w"');
   });
 
-  it("keeps the guest-room RGB/Warm/White maps on a two-row card", () => {
+  it("keeps a multi-row RGB/Warm/White map on a two-row card", () => {
     const config = {
       type: `custom:${CARD_NAME}`,
       title: "Room lights",
-      entity: "input_text.guest_room_light_group",
+      entity: "input_text.room_light_group",
       show_switches: true,
       rgb: [
-        { entity: "light.guest_room_guest_room_strip_light", hide: true },
-        { entity: "light.guest_room_rgb_batten" },
-        { entity: "light.desk_strip_light" },
+        { entity: "light.room_strip", hide: true },
+        { entity: "light.room_rgb" },
+        { entity: "light.room_accent" },
       ],
       warm: [
-        { entity: "switch.guest_room_sonoff_4ch_pro_x_1_light_1" },
-        { entity: "switch.guest_room_shelly_2_x1_warm_light" },
+        { entity: "switch.room_warm_1" },
+        { entity: "switch.room_warm_2" },
       ],
       white: [
-        { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light" },
-        { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1" },
-        { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2" },
-        { entity: "light.guest_room_desk_z2ch_1_white_light" },
-        { entity: "switch.desk_shelly2_desk_2_white_light" },
+        { entity: "switch.room_white_center" },
+        { entity: "switch.room_white_1" },
+        { entity: "switch.room_white_2" },
+        { entity: "light.room_desk_white" },
+        { entity: "switch.room_desk_white" },
       ],
       warm_stages: [
         {
           name: "Dim",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_light_1", state: "off" as const },
-            { entity: "switch.guest_room_shelly_2_x1_warm_light", state: "on" as const },
+            { entity: "switch.room_warm_1", state: "off" as const },
+            { entity: "switch.room_warm_2", state: "on" as const },
           ],
         },
         {
           name: "Soft",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_light_1", state: "on" as const },
-            { entity: "switch.guest_room_shelly_2_x1_warm_light", state: "off" as const },
+            { entity: "switch.room_warm_1", state: "on" as const },
+            { entity: "switch.room_warm_2", state: "off" as const },
           ],
         },
         {
           name: "Medium",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_light_1", state: "on" as const },
-            { entity: "switch.guest_room_shelly_2_x1_warm_light", state: "on" as const },
+            { entity: "switch.room_warm_1", state: "on" as const },
+            { entity: "switch.room_warm_2", state: "on" as const },
           ],
         },
       ],
@@ -163,51 +163,51 @@ describe("mini lights layout", () => {
         {
           name: "Min",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1", state: "off" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2", state: "off" as const },
-            { entity: "light.guest_room_desk_z2ch_1_white_light", state: "off" as const },
-            { entity: "switch.desk_shelly2_desk_2_white_light", state: "off" as const },
+            { entity: "switch.room_white_center", state: "on" as const },
+            { entity: "switch.room_white_1", state: "off" as const },
+            { entity: "switch.room_white_2", state: "off" as const },
+            { entity: "light.room_desk_white", state: "off" as const },
+            { entity: "switch.room_desk_white", state: "off" as const },
           ],
         },
         {
           name: "Low",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2", state: "off" as const },
-            { entity: "light.guest_room_desk_z2ch_1_white_light", state: "off" as const },
-            { entity: "switch.desk_shelly2_desk_2_white_light", state: "off" as const },
+            { entity: "switch.room_white_center", state: "on" as const },
+            { entity: "switch.room_white_1", state: "on" as const },
+            { entity: "switch.room_white_2", state: "off" as const },
+            { entity: "light.room_desk_white", state: "off" as const },
+            { entity: "switch.room_desk_white", state: "off" as const },
           ],
         },
         {
           name: "Medium",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2", state: "on" as const },
-            { entity: "light.guest_room_desk_z2ch_1_white_light", state: "off" as const },
-            { entity: "switch.desk_shelly2_desk_2_white_light", state: "off" as const },
+            { entity: "switch.room_white_center", state: "on" as const },
+            { entity: "switch.room_white_1", state: "on" as const },
+            { entity: "switch.room_white_2", state: "on" as const },
+            { entity: "light.room_desk_white", state: "off" as const },
+            { entity: "switch.room_desk_white", state: "off" as const },
           ],
         },
         {
           name: "High",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2", state: "on" as const },
-            { entity: "light.guest_room_desk_z2ch_1_white_light", state: "on" as const },
-            { entity: "switch.desk_shelly2_desk_2_white_light", state: "off" as const },
+            { entity: "switch.room_white_center", state: "on" as const },
+            { entity: "switch.room_white_1", state: "on" as const },
+            { entity: "switch.room_white_2", state: "on" as const },
+            { entity: "light.room_desk_white", state: "on" as const },
+            { entity: "switch.room_desk_white", state: "off" as const },
           ],
         },
         {
           name: "Max",
           switches: [
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_center_light", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l1", state: "on" as const },
-            { entity: "switch.guest_room_sonoff_4ch_pro_x_1_white_l2", state: "on" as const },
-            { entity: "light.guest_room_desk_z2ch_1_white_light", state: "on" as const },
-            { entity: "switch.desk_shelly2_desk_2_white_light", state: "off" as const },
+            { entity: "switch.room_white_center", state: "on" as const },
+            { entity: "switch.room_white_1", state: "on" as const },
+            { entity: "switch.room_white_2", state: "on" as const },
+            { entity: "light.room_desk_white", state: "on" as const },
+            { entity: "switch.room_desk_white", state: "off" as const },
           ],
         },
       ],
@@ -219,23 +219,23 @@ describe("mini lights layout", () => {
     expect(
       resolveRowStageTargets(config, "warm", 1).map((item) => [item.entity, item.state]),
     ).toEqual([
-      ["switch.guest_room_sonoff_4ch_pro_x_1_light_1", "off"],
-      ["switch.guest_room_shelly_2_x1_warm_light", "on"],
+      ["switch.room_warm_1", "off"],
+      ["switch.room_warm_2", "on"],
     ]);
     expect(
       resolveRowStageTargets(config, "warm", 2).map((item) => [item.entity, item.state]),
     ).toEqual([
-      ["switch.guest_room_sonoff_4ch_pro_x_1_light_1", "on"],
-      ["switch.guest_room_shelly_2_x1_warm_light", "off"],
+      ["switch.room_warm_1", "on"],
+      ["switch.room_warm_2", "off"],
     ]);
     expect(
       resolveRowStageTargets(config, "white", 5).map((item) => [item.entity, item.state]),
     ).toEqual([
-      ["switch.guest_room_sonoff_4ch_pro_x_1_center_light", "on"],
-      ["switch.guest_room_sonoff_4ch_pro_x_1_white_l1", "on"],
-      ["switch.guest_room_sonoff_4ch_pro_x_1_white_l2", "on"],
-      ["light.guest_room_desk_z2ch_1_white_light", "on"],
-      ["switch.desk_shelly2_desk_2_white_light", "off"],
+      ["switch.room_white_center", "on"],
+      ["switch.room_white_1", "on"],
+      ["switch.room_white_2", "on"],
+      ["light.room_desk_white", "on"],
+      ["switch.room_desk_white", "off"],
     ]);
     expect(miniControlRow(parseLightsState(), config)).toBe("rgb");
     const whiteOff = exclusiveLightsState(

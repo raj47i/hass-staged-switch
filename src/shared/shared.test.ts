@@ -62,69 +62,69 @@ const hassStub = (
 
 describe("entity display names", () => {
   it("pretty-prints an entity id when Home Assistant has no name", () => {
-    expect(friendlyNameFromEntity("switch.hall_4x_2_switch_2")).toBe(
-      "Hall 4x 2 Switch 2",
+    expect(friendlyNameFromEntity("switch.demo_4ch_2_switch_2")).toBe(
+      "Demo 4ch 2 Switch 2",
     );
-    expect(entityDisplayName(undefined, "switch.hall_4x_2_switch_2")).toBe(
-      "Hall 4x 2 Switch 2",
+    expect(entityDisplayName(undefined, "switch.demo_4ch_2_switch_2")).toBe(
+      "Demo 4ch 2 Switch 2",
     );
   });
 
   it("prefers a renamed registry name over a stale friendly_name", () => {
     const hass = hassStub({
       states: {
-        "switch.hall_4x_2_switch_2": {
-          entity_id: "switch.hall_4x_2_switch_2",
+        "switch.demo_4ch_2_switch_2": {
+          entity_id: "switch.demo_4ch_2_switch_2",
           state: "off",
-          attributes: { friendly_name: "Switch hall_4x_2_switch_2" },
+          attributes: { friendly_name: "Switch demo_4ch_2_switch_2" },
           last_changed: "",
           last_updated: "",
         },
       },
       entities: {
-        "switch.hall_4x_2_switch_2": {
-          entity_id: "switch.hall_4x_2_switch_2",
-          name: "Hall stair",
+        "switch.demo_4ch_2_switch_2": {
+          entity_id: "switch.demo_4ch_2_switch_2",
+          name: "Stair lamp",
         },
       },
     });
-    expect(entityDisplayName(hass, "switch.hall_4x_2_switch_2")).toBe("Hall stair");
+    expect(entityDisplayName(hass, "switch.demo_4ch_2_switch_2")).toBe("Stair lamp");
   });
 
   it("does not use a device name when the entity already has a friendly_name", () => {
     const hass = hassStub({
       states: {
-        "switch.hall_4x_2_switch_2": {
-          entity_id: "switch.hall_4x_2_switch_2",
+        "switch.demo_4ch_2_switch_2": {
+          entity_id: "switch.demo_4ch_2_switch_2",
           state: "off",
-          attributes: { friendly_name: "Hall stair" },
+          attributes: { friendly_name: "Stair lamp" },
           last_changed: "",
           last_updated: "",
         },
       },
       entities: {
-        "switch.hall_4x_2_switch_2": {
-          entity_id: "switch.hall_4x_2_switch_2",
+        "switch.demo_4ch_2_switch_2": {
+          entity_id: "switch.demo_4ch_2_switch_2",
           device_id: "box",
         },
       },
       devices: {
-        box: { id: "box", name: "Hall 4x", name_by_user: "Hall box" },
+        box: { id: "box", name: "Relay 4ch", name_by_user: "Relay box" },
       },
     });
-    expect(entityDisplayName(hass, "switch.hall_4x_2_switch_2")).toBe("Hall stair");
-    expect(generatedEntityLabel("switch.hall_4x_2_switch_2")).toBe(
-      "Switch hall_4x_2_switch_2",
+    expect(entityDisplayName(hass, "switch.demo_4ch_2_switch_2")).toBe("Stair lamp");
+    expect(generatedEntityLabel("switch.demo_4ch_2_switch_2")).toBe(
+      "Switch demo_4ch_2_switch_2",
     );
     expect(
       isGeneratedEntityLabel(
-        "Switch hall_4x_2_switch_2",
-        "switch.hall_4x_2_switch_2",
-        "Hall stair",
+        "Switch demo_4ch_2_switch_2",
+        "switch.demo_4ch_2_switch_2",
+        "Stair lamp",
       ),
     ).toBe(true);
     expect(
-      isGeneratedEntityLabel("Movie", "switch.hall_4x_2_switch_2", "Hall stair"),
+      isGeneratedEntityLabel("Movie", "switch.demo_4ch_2_switch_2", "Stair lamp"),
     ).toBe(false);
   });
 });
@@ -389,7 +389,7 @@ describe("hass helpers", () => {
 
   it("maps bluetooth and nested HA errors to a short card message", async () => {
     const ble =
-      "Failed to perform the action scene/turn_on. Nan [F3:16:21:BB:E1:25] (id=40:E5:AD:B7:8C:73) - F3:16:21:BB:E1:25: Failed to connect after 9 attempt(s): No backend with an available connection slot that can reach address F3:16:21:BB:E1:25 was found: unknown (never seen by any scanner); 1 scanner(s) registered, 1 scanning, 1 connectable: The proxy/adapter is out of connection slots or the device is no longer reachable; Add additional proxies (https://esphome.github.io/bluetooth-proxies/) near this device";
+      "Failed to perform the action scene/turn_on. Lamp [AA:BB:CC:11:22:33] (id=DE:AD:BE:EF:00:01) - AA:BB:CC:11:22:33: Failed to connect after 9 attempt(s): No backend with an available connection slot that can reach address AA:BB:CC:11:22:33 was found: unknown (never seen by any scanner); 1 scanner(s) registered, 1 scanning, 1 connectable: The proxy/adapter is out of connection slots or the device is no longer reachable; Add additional proxies (https://esphome.github.io/bluetooth-proxies/) near this device";
     const friendly =
       "Couldn't reach a device. Check power, range, or the Bluetooth proxy, then try again.";
     expect(friendlyActionError(new Error(ble), "Failed to update lights")).toBe(
@@ -414,14 +414,14 @@ describe("hass helpers", () => {
       hass,
       "scene",
       "turn_on",
-      { entity_id: "scene.nan" },
-      { entity_id: "scene.nan" },
+      { entity_id: "scene.demo" },
+      { entity_id: "scene.demo" },
     );
     expect(args[0]).toEqual([
       "scene",
       "turn_on",
-      { entity_id: "scene.nan" },
-      { entity_id: "scene.nan" },
+      { entity_id: "scene.demo" },
+      { entity_id: "scene.demo" },
       false,
     ]);
     expect(
@@ -438,7 +438,7 @@ describe("hass helpers", () => {
         ws.push(msg);
       },
     });
-    await callHassService(wired, "scene", "turn_on", { entity_id: "scene.nan" });
+    await callHassService(wired, "scene", "turn_on", { entity_id: "scene.demo" });
     expect(ws[0]).toMatchObject({
       type: "call_service",
       domain: "scene",

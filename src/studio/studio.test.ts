@@ -1016,8 +1016,8 @@ describe("minimal light scenes", () => {
       },
     } as HomeAssistant;
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a", "light.warm_b"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a", "light.warm_b"],
@@ -1043,7 +1043,7 @@ describe("minimal light scenes", () => {
           ? { "light.rgb": { state: "on" as const } }
           : {},
       }));
-    const restored = draftFromLightScenes("nan", stripped);
+    const restored = draftFromLightScenes("lamp", stripped);
     expect(restored.rgb).toEqual(["light.rgb"]);
     expect(restored.whites).toEqual(["light.warm_a", "light.warm_b"]);
     expect(restored.whitesStages).toBe(3);
@@ -1076,10 +1076,10 @@ describe("studio scene cache", () => {
 
   it("reads membership from metadata when meta is missing", async () => {
     const hass = {
-      states: listed([{ id: "ssm_nan_off", name: "Nan · Off / Default" }]),
+      states: listed([{ id: "ssm_lamp_off", name: "Lamp · Off / Default" }]),
       callApi: async () => ({
-        id: "ssm_nan_off",
-        name: "Nan · Off / Default",
+        id: "ssm_lamp_off",
+        name: "Lamp · Off / Default",
         entities: {},
         metadata: {
           rgb: ["light.rgb"],
@@ -1096,8 +1096,8 @@ describe("studio scene cache", () => {
   it("dedupes concurrent refreshes and skips GET when cached", async () => {
     const gets: string[] = [];
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a"],
@@ -1133,8 +1133,8 @@ describe("studio scene cache", () => {
 
   it("lets cards pick up a just-written set without another GET", async () => {
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a"],
@@ -1151,12 +1151,12 @@ describe("studio scene cache", () => {
         throw new Error("should not GET");
       },
     } as HomeAssistant;
-    const version = await ensureStudioScenes(hass, "nan");
+    const version = await ensureStudioScenes(hass, "lamp");
     expect(version).toBe(studioScenesVersion());
-    const first = await hydrateStudioCard(hass, "nan", { version: 0 });
+    const first = await hydrateStudioCard(hass, "lamp", { version: 0 });
     expect(first?.changed).toBe(true);
-    const second = await hydrateStudioCard(hass, "nan", {
-      slug: "nan",
+    const second = await hydrateStudioCard(hass, "lamp", {
+      slug: "lamp",
       version: first?.version ?? 0,
     });
     expect(second?.changed).toBe(false);
@@ -1164,8 +1164,8 @@ describe("studio scene cache", () => {
 
   it("keeps other slugs visible after remembering one written set", () => {
     const written = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb"],
       rgb: ["light.rgb"],
     });
@@ -1174,7 +1174,7 @@ describe("studio scene cache", () => {
       states: listed([{ id: "ssl_guest_off", name: "Guest · Off / Default" }]),
     } as HomeAssistant;
     expect(peekStudioScenes(hass).map((scene) => scene.id)).toEqual(
-      expect.arrayContaining(["ssl_guest_off", "ssm_nan_off"]),
+      expect.arrayContaining(["ssl_guest_off", "ssm_lamp_off"]),
     );
   });
 });
@@ -1218,8 +1218,8 @@ describe("wizard step persist", () => {
   it("writes the full set in order and keeps it in the studio cache", async () => {
     const { hass, calls } = recordingHass();
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a"],
@@ -1241,22 +1241,22 @@ describe("wizard step persist", () => {
     expect(peekStudioScenes().map((scene) => scene.id)).toEqual(
       scenes.map((scene) => scene.id),
     );
-    expect(draftFromLightScenes("nan", peekStudioScenes()).whites).toEqual([
+    expect(draftFromLightScenes("lamp", peekStudioScenes()).whites).toEqual([
       "light.warm_a",
     ]);
   });
 
   it("rewrites later steps and deletes leftover looks", async () => {
     const four = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.warm_a"],
       whites: ["light.warm_a"],
       whitesStages: 4,
     });
     const three = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.warm_a"],
       whites: ["light.warm_a"],
       whitesStages: 3,
@@ -1279,10 +1279,10 @@ describe("wizard step persist", () => {
       three,
       four.map((scene) => scene.id),
     );
-    expect(calls.some((call) => call.method === "DELETE" && call.path.endsWith("ssm_nan_t4"))).toBe(
+    expect(calls.some((call) => call.method === "DELETE" && call.path.endsWith("ssm_lamp_t4"))).toBe(
       true,
     );
-    expect(calls.some((call) => call.method === "POST" && call.path.endsWith("ssm_nan_t4"))).toBe(
+    expect(calls.some((call) => call.method === "POST" && call.path.endsWith("ssm_lamp_t4"))).toBe(
       false,
     );
     expect(peekStudioScenes().map((scene) => scene.id)).toEqual(
@@ -1333,8 +1333,8 @@ describe("wizard step persist", () => {
   it("keeps Whites membership when a later step rewrites the same slug", async () => {
     const { hass } = recordingHass();
     const first = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a", "light.warm_b"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a", "light.warm_b"],
@@ -1342,8 +1342,8 @@ describe("wizard step persist", () => {
     });
     await persistStudioScenes(hass, first);
     const second = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a", "light.warm_b"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a", "light.warm_b"],
@@ -1355,7 +1355,7 @@ describe("wizard step persist", () => {
       second,
       first.map((scene) => scene.id),
     );
-    const restored = draftFromLightScenes("nan", peekStudioScenes());
+    const restored = draftFromLightScenes("lamp", peekStudioScenes());
     expect(restored.whites).toEqual(["light.warm_a", "light.warm_b"]);
     expect(restored.rgb).toEqual(["light.rgb"]);
     expect(restored.hex.toLowerCase()).toBe("#7ea6ff");
@@ -1373,8 +1373,8 @@ describe("studio set delete", () => {
 
   it("deletes every scene in the set and hides it even if Home Assistant still lists it", async () => {
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.rgb", "light.warm_a"],
       rgb: ["light.rgb"],
       whites: ["light.warm_a"],
@@ -1403,13 +1403,13 @@ describe("studio set delete", () => {
     } as HomeAssistant;
     rememberWrittenScenes(scenes);
     const group = summarizeGroups(scenes)[0];
-    expect(group?.slug).toBe("nan");
+    expect(group?.slug).toBe("lamp");
     const ids = await deleteStudioSet(hass, group!);
     expect(ids).toEqual(scenes.map((scene) => scene.id));
     expect(deleted).toEqual(
       scenes.map((scene) => `config/scene/config/${scene.id}`),
     );
-    expect(peekStudioScenes(hass).some((scene) => scene.id.startsWith("ssm_nan_"))).toBe(
+    expect(peekStudioScenes(hass).some((scene) => scene.id.startsWith("ssm_lamp_"))).toBe(
       false,
     );
     expect(summarizeGroups(peekStudioScenes(hass))).toEqual([]);
@@ -1465,8 +1465,8 @@ describe("studio set delete", () => {
 
   it("can still prune leftover Home Assistant scenes after a set was forgotten", async () => {
     const scenes = lightGroupToScenes({
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.warm_a"],
       whites: ["light.warm_a"],
       whitesStages: 3,
@@ -1488,14 +1488,14 @@ describe("studio set delete", () => {
     } as HomeAssistant;
     await deleteStudioSet(hass, {
       kind: "minimal",
-      slug: "nan",
-      name: "Nan",
+      slug: "lamp",
+      name: "Lamp",
       sceneCount: scenes.length,
       entityCount: 1,
       scenes,
     });
     expect(peekStudioScenes(hass)).toEqual([]);
-    expect(studioSceneIdsForSlug(hass, "nan", "minimal")).toEqual(
+    expect(studioSceneIdsForSlug(hass, "lamp", "minimal")).toEqual(
       scenes.map((scene) => scene.id),
     );
   });
@@ -2269,15 +2269,15 @@ describe("studio card bind", () => {
       },
     });
     const draft = {
-      ...newLightGroupDraft("Nan", "minimal"),
-      slug: "nan",
+      ...newLightGroupDraft("Lamp", "minimal"),
+      slug: "lamp",
       entities: ["light.ble"],
       rgb: ["light.ble"],
       whites: ["light.ble"],
       whitesStages: 3,
     };
     const scenes = lightGroupToScenes(draft);
-    const config = lightsCardFromStudio("custom:staged-lights-mini-card", "nan", scenes);
+    const config = lightsCardFromStudio("custom:staged-lights-mini-card", "lamp", scenes);
     const key = lightsStorageKey(config, "staged-lights-mini-card");
     writeStoredLightsState(key, exclusiveLightsState(undefined, "white", { stage: 2 }));
     const hass = {
@@ -2316,11 +2316,11 @@ describe("studio card bind", () => {
       language: "en",
       localize: (key: string) => key,
       states: {
-        "scene.ssm_nan_off": scene("ssm_nan_off", {
+        "scene.ssm_lamp_off": scene("ssm_lamp_off", {
           "light.ble": { state: "off" },
           "light.wifi": { state: "off" },
         }),
-        "scene.ssm_nan_rgb": scene("ssm_nan_rgb", {
+        "scene.ssm_lamp_rgb": scene("ssm_lamp_rgb", {
           "light.ble": { state: "on" },
           "light.wifi": { state: "off" },
         }),
@@ -2334,7 +2334,7 @@ describe("studio card bind", () => {
         }
       },
     } as HomeAssistant;
-    await expect(activateStudioScene(hass, "ssm_nan_off")).rejects.toThrow(/Failed to connect/);
+    await expect(activateStudioScene(hass, "ssm_lamp_off")).rejects.toThrow(/Failed to connect/);
     expect(calls).toContain("turn_off");
   });
 });
