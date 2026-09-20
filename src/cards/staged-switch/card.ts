@@ -822,7 +822,6 @@ export class StagedSwitchCard extends LitElement implements LovelaceCard {
     }
 
     const config = this._resolved ?? this._config!;
-    const stages = this._stages;
     const current = this._currentStage;
     const visibleRows = chunkEvenly(this._visibleEntities);
     const stageButtons = this._stageButtons;

@@ -30,11 +30,18 @@ export const showsEntityButtons = (
   return whenManual ? config.show_switches !== false : Boolean(config.show_switches);
 };
 
+const rosterEntityIds = (
+  roster: Iterable<string | SwitchEntityConfig | undefined | null>,
+): string[] =>
+  uniqueEntityIds(
+    Array.from(roster, (item) => (typeof item === "string" ? item : item?.entity)),
+  );
+
 export const pruneHiddenEntities = (
   hidden: Iterable<string | undefined | null>,
-  roster: Iterable<string | undefined | null>,
+  roster: Iterable<string | SwitchEntityConfig | undefined | null>,
 ): string[] => {
-  const keep = new Set(uniqueEntityIds(roster));
+  const keep = new Set(rosterEntityIds(roster));
   return uniqueEntityIds(hidden).filter((entityId) => keep.has(entityId));
 };
 
@@ -42,10 +49,10 @@ export const toggleHiddenEntity = (
   hidden: Iterable<string | undefined | null>,
   entityId: string,
   visible: boolean,
-  roster: Iterable<string | undefined | null>,
+  roster: Iterable<string | SwitchEntityConfig | undefined | null>,
 ): string[] | undefined => {
   const next = new Set(pruneHiddenEntities(hidden, roster));
-  const ids = uniqueEntityIds(roster);
+  const ids = rosterEntityIds(roster);
   if (!ids.includes(entityId)) {
     return next.size ? [...next] : undefined;
   }
