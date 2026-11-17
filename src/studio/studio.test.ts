@@ -7,6 +7,7 @@ import { studioSetEntityIds } from "./entity-buttons";
 import { rgbToHex } from "../cards/staged-lights/color";
 import { lightsStorageKey, writeStoredLightsState } from "../cards/staged-lights/persist";
 import { exclusiveGroupState, exclusiveLightsState } from "../cards/staged-lights/state";
+import { miniShowsGroupControls } from "../cards/staged-lights-mini/layout";
 import { percentToBrightness } from "../cards/staged-lights/stages";
 import {
   advancedSceneId,
@@ -2388,6 +2389,158 @@ describe("studio card bind", () => {
       studioLooksMatch(
         exclusiveGroupState(undefined, inferred.group?.id, inferred.group?.stage),
         inferred,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps custom Fun levels on one group instead of leftover Hall/Sofa buttons", () => {
+    const funScenes = [
+      {
+        id: "sla_living_00",
+        name: "Living Room Lights · Off / Default",
+        entities: {
+          "light.hall": { state: "off" as const },
+          "light.sofa": { state: "off" as const },
+          "light.lamp": { state: "off" as const },
+        },
+        meta: {
+          entities: ["light.hall", "light.sofa", "light.lamp"],
+          groups: [
+            {
+              name: "Fun",
+              entities: ["light.hall", "light.sofa"],
+              stages: 5,
+              levelNames: ["Min", "Low", "Mid", "High", "Max"],
+              mode: "levels" as const,
+            },
+            {
+              name: "Warm",
+              entities: ["light.lamp"],
+              stages: 2,
+              levelNames: ["Min", "Max"],
+              mode: "levels" as const,
+            },
+          ],
+        },
+      },
+      {
+        id: "sla_living_01",
+        name: "Living Room Lights · Fun · Hall",
+        entities: {
+          "light.hall": { state: "on" as const, brightness: 80 },
+          "light.sofa": { state: "off" as const },
+          "light.lamp": { state: "off" as const },
+        },
+      },
+      {
+        id: "sla_living_02",
+        name: "Living Room Lights · Fun · Sofa",
+        entities: {
+          "light.hall": { state: "off" as const },
+          "light.sofa": { state: "on" as const, brightness: 80 },
+          "light.lamp": { state: "off" as const },
+        },
+      },
+      {
+        id: "sla_living_03",
+        name: "Living Room Lights · Fun · Max",
+        entities: {
+          "light.hall": { state: "on" as const, brightness: 255 },
+          "light.sofa": { state: "on" as const, brightness: 255 },
+          "light.lamp": { state: "off" as const },
+        },
+      },
+      {
+        id: "sla_living_04",
+        name: "Living Room Lights · Warm · Min",
+        entities: {
+          "light.hall": { state: "off" as const },
+          "light.sofa": { state: "off" as const },
+          "light.lamp": { state: "on" as const, brightness: 40 },
+        },
+      },
+      {
+        id: "sla_living_05",
+        name: "Living Room Lights · Warm · Max",
+        entities: {
+          "light.hall": { state: "off" as const },
+          "light.sofa": { state: "off" as const },
+          "light.lamp": { state: "on" as const, brightness: 255 },
+        },
+      },
+      {
+        id: "sla_living_06",
+        name: "Living Room Lights · Movie",
+        entities: {
+          "light.hall": { state: "on" as const, brightness: 40 },
+          "light.sofa": { state: "off" as const },
+          "light.lamp": { state: "on" as const, brightness: 80 },
+        },
+      },
+    ];
+    const restored = draftFromAdvancedScenes("living", funScenes);
+    expect(restored.groups.map((group) => [group.name, group.levelNames])).toEqual([
+      ["Fun", ["Hall", "Sofa", "Max"]],
+      ["Warm", ["Min", "Max"]],
+    ]);
+    expect(restored.looks.map((look) => look.name)).toEqual(["Movie"]);
+    const config = lightsCardFromAdvanced(
+      "custom:scene-studio-room-lights-mini-card",
+      "living",
+      funScenes,
+    );
+    expect(config.groups?.map((group) => group.name)).toEqual(["Fun", "Warm"]);
+    expect(config.looks?.map((look) => look.name)).toEqual(["Movie"]);
+    expect(config.groups?.[0]?.stages?.map((stage) => stage.name)).toEqual([
+      "Hall",
+      "Sofa",
+      "Max",
+    ]);
+    const funOn = exclusiveGroupState(undefined, config.groups?.[0]?.id, 3);
+    expect(miniShowsGroupControls(funOn, config)).toBe(true);
+    const stripped = funScenes.map((scene, index) =>
+      index === 0 ? { ...scene, meta: undefined } : scene,
+    );
+    expect(draftFromAdvancedScenes("living", stripped).groups[0]?.levelNames).toEqual([
+      "Hall",
+      "Sofa",
+      "Max",
+    ]);
+    const renamed = funScenes.map((scene) => {
+      if (scene.meta?.groups) {
+        return {
+          ...scene,
+          meta: {
+            ...scene.meta,
+            groups: scene.meta.groups.map((group) =>
+              group.name === "Fun" ? { ...group, name: "Amber" } : group,
+            ),
+          },
+        };
+      }
+      return scene;
+    });
+    const amber = draftFromAdvancedScenes("living", renamed);
+    expect(amber.groups.map((group) => [group.name, group.levelNames])).toEqual([
+      ["Amber", ["Hall", "Sofa", "Max"]],
+      ["Warm", ["Min", "Max"]],
+    ]);
+    expect(amber.looks.map((look) => look.name)).toEqual(["Movie"]);
+    const amberCard = lightsCardFromAdvanced(
+      "custom:scene-studio-room-lights-mini-card",
+      "living",
+      renamed,
+    );
+    expect(amberCard.groups?.[0]?.name).toBe("Amber");
+    expect(amberCard.groups?.[0]?.stages?.map((stage) => stage.name)).toEqual([
+      "Hall",
+      "Sofa",
+      "Max",
+    ]);
+    expect(
+      miniShowsGroupControls(
+        exclusiveGroupState(undefined, amberCard.groups?.[0]?.id, 1),
+        amberCard,
       ),
     ).toBe(true);
   });

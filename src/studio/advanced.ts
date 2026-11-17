@@ -7,10 +7,9 @@ import { advancedSceneId, parseAdvancedSceneId, slugify } from "./ids";
 import {
   asRgbPercent,
   DEFAULT_RGB_PERCENT,
-  entityIdsFromScenes,
-  isIntensityStageName,
-  lightSceneTitle,
   colorFromSceneEntity,
+  entityIdsFromScenes,
+  lightSceneTitle,
   lookToSceneState,
   studioIntensityNames,
   studioStagePercent,
@@ -362,8 +361,7 @@ export const draftFromAdvancedScenes = (
   ordered.slice(1).forEach((scene) => {
     const label = scene.name.split(" · ").slice(1).join(" · ").trim() || "Group";
     const parts = label.split(" · ");
-    const suffix = parts[parts.length - 1] ?? "";
-    if (parts.length > 1 && isIntensityStageName(suffix)) {
+    if (parts.length > 1) {
       const groupName = parts.slice(0, -1).join(" · ") || "Group";
       clustered.set(groupName, [...(clustered.get(groupName) ?? []), scene]);
       return;
@@ -376,42 +374,96 @@ export const draftFromAdvancedScenes = (
     "";
   const sceneLabel = (scene: SceneConfig): string =>
     scene.name.split(" · ").slice(1).join(" · ").trim();
+  const sceneIndex = (scene: SceneConfig): number =>
+    parseAdvancedSceneId(scene.id)?.index ?? 0;
+  const unusedScenes = (): SceneConfig[] =>
+    ordered.slice(1).filter((scene) => !consumed.has(scene.id));
+  const reservedGroupNames = (except: string): Set<string> =>
+    new Set(
+      (meta?.groups ?? [])
+        .map((group) => group.name.trim())
+        .filter((name) => name && name !== except),
+    );
+  const orderCluster = (matched: SceneConfig[], levelNames?: string[]): SceneConfig[] => {
+    const sorted = [...matched].sort((left, right) => sceneIndex(left) - sceneIndex(right));
+    if (!levelNames?.length) {
+      return sorted;
+    }
+    const byName = new Map(sorted.map((scene) => [sceneSuffix(scene), scene]));
+    const named = levelNames
+      .map((label) => byName.get(label))
+      .filter((scene): scene is SceneConfig => Boolean(scene));
+    if (named.length === sorted.length) {
+      return named;
+    }
+    return sorted;
+  };
+  const matchesGroupTitle = (
+    scene: SceneConfig,
+    groupName: string,
+    rgb: boolean,
+  ): boolean => {
+    const label = sceneLabel(scene);
+    const parts = label.split(" · ");
+    if ((parts[0] ?? "") !== groupName) {
+      return false;
+    }
+    return rgb || label === groupName || parts.length >= 2;
+  };
+  const takeUnclaimedRun = (groupName: string, rgb: boolean): SceneConfig[] => {
+    const unused = unusedScenes();
+    const first = unused[0];
+    if (!first) {
+      return [];
+    }
+    const reserved = reservedGroupNames(groupName);
+    const prefix = sceneLabel(first).split(" · ")[0] ?? "";
+    if (reserved.has(prefix)) {
+      return [];
+    }
+    const run: SceneConfig[] = [];
+    for (const scene of unused) {
+      const label = sceneLabel(scene);
+      const parts = label.split(" · ");
+      const head = parts[0] ?? "";
+      if (reserved.has(head)) {
+        break;
+      }
+      if (run.length && head !== prefix) {
+        break;
+      }
+      if (rgb) {
+        if (parts.length >= 2) {
+          break;
+        }
+        run.push(scene);
+        break;
+      }
+      if (parts.length < 2) {
+        break;
+      }
+      run.push(scene);
+    }
+    return run;
+  };
   const clusterForGroup = (
     groupName: string,
     levelNames?: string[],
     rgb = false,
   ): SceneConfig[] => {
-    const matched = ordered.slice(1).filter((scene) => {
-      const label = sceneLabel(scene);
-      const parts = label.split(" · ");
-      if ((parts[0] ?? "") !== groupName) {
-        return false;
-      }
-      if (rgb) {
-        return true;
-      }
-      if (label === groupName) {
-        return true;
-      }
-      if (parts.length < 2) {
-        return false;
-      }
-      const suffix = parts.slice(1).join(" · ");
-      return !levelNames?.length || levelNames.includes(suffix);
-    });
+    const unused = unusedScenes();
+    const named = unused.filter((scene) => matchesGroupTitle(scene, groupName, rgb));
+    const claimed = new Set(named.map((scene) => scene.id));
+    const extras = takeUnclaimedRun(groupName, rgb).filter((scene) => !claimed.has(scene.id));
+    const matched = [...named, ...extras];
     if (matched.length) {
-      matched.forEach((scene) => consumed.add(scene.id));
-      if (!levelNames?.length) {
-        return matched;
-      }
-      const byName = new Map(matched.map((scene) => [sceneSuffix(scene), scene]));
-      return levelNames
-        .map((label) => byName.get(label))
-        .filter((scene): scene is SceneConfig => Boolean(scene));
+      const cluster = orderCluster(matched, rgb ? undefined : levelNames);
+      cluster.forEach((scene) => consumed.add(scene.id));
+      return cluster;
     }
-    const byIntensity = clustered.get(groupName) ?? [];
-    byIntensity.forEach((scene) => consumed.add(scene.id));
-    return byIntensity;
+    const byName = clustered.get(groupName) ?? [];
+    byName.forEach((scene) => consumed.add(scene.id));
+    return byName;
   };
   const pushGroup = (
     groupName: string,
@@ -453,14 +505,14 @@ export const draftFromAdvancedScenes = (
       }
     });
     const rgb = mode === "rgb";
-    const names =
-      rgb
-        ? undefined
+    const inferred = cluster.map((scene) => sceneSuffix(scene)).filter(Boolean);
+    const names = rgb
+      ? undefined
+      : inferred.length
+        ? inferred
         : levelNames?.length
           ? parseAdvancedLevelNames(levelNames)
-          : cluster.length
-            ? cluster.map((scene) => sceneSuffix(scene)).filter(Boolean)
-            : undefined;
+          : undefined;
     const looks = rgb
       ? last && sceneLooks[String(cluster.length)]
         ? { "1": sceneLooks[String(cluster.length)] }
